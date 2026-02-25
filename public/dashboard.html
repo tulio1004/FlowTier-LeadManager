@@ -309,32 +309,42 @@
       
       // Find custom industries: industries used by leads that aren't in the default list
       const customIndustries = [];
+      const customIndustryCounts = {};
       const defaultSet = new Set(industries.map(i => i.toLowerCase()));
       allLeads.forEach(l => {
         if (l.industry && !defaultSet.has(l.industry.toLowerCase())) {
           if (!customIndustries.includes(l.industry)) customIndustries.push(l.industry);
+          customIndustryCounts[l.industry] = (customIndustryCounts[l.industry] || 0) + 1;
         }
       });
       customIndustries.sort();
+
+      // Count leads per default industry
+      const defaultIndustryCounts = {};
+      allLeads.forEach(l => {
+        if (l.industry && defaultSet.has(l.industry.toLowerCase())) {
+          defaultIndustryCounts[l.industry] = (defaultIndustryCounts[l.industry] || 0) + 1;
+        }
+      });
 
       const industryNav = document.getElementById('industryNav');
       let html = defaultIndustries.map(ind => `
         <a href="/industry/${encodeURIComponent(ind)}" class="nav-item ${currentIndustryFilter === ind ? 'active' : ''}">
           <span class="icon">&#128193;</span> ${ind}
-          <span class="count" id="countInd_${ind.replace(/\s/g, '_')}">0</span>
+          <span class="count" id="countInd_${ind.replace(/\s/g, '_')}">${defaultIndustryCounts[ind] || 0}</span>
         </a>
       `).join('');
 
-      // "Other" with expandable custom industries
+      // "Other" with expandable custom industries — count = total across ALL custom industries
       const otherCount = allLeads.filter(l => {
         if (!l.industry) return true;
-        return !defaultSet.has(l.industry.toLowerCase()) || l.industry.toLowerCase() === 'other';
+        return !defaultSet.has(l.industry.toLowerCase());
       }).length;
       const otherActive = currentIndustryFilter === 'Other' || customIndustries.includes(currentIndustryFilter);
       const otherExpanded = otherActive || customIndustries.length > 0;
 
       html += `
-        <div class="nav-item-group">
+        <div class="nav-item-group${otherExpanded ? ' expanded' : ''}">
           <a href="/industry/Other" class="nav-item ${currentIndustryFilter === 'Other' ? 'active' : ''}" style="position:relative;">
             <span class="icon">&#128193;</span> Other
             <span class="count" id="countInd_Other">${otherCount}</span>
@@ -345,7 +355,7 @@
               ${customIndustries.map(ci => `
                 <a href="/industry/${encodeURIComponent(ci)}" class="nav-item sub-item ${currentIndustryFilter === ci ? 'active' : ''}" style="padding-left:36px;font-size:0.75rem;">
                   <span class="icon" style="font-size:0.65rem;">&#9702;</span> ${ci}
-                  <span class="count" id="countInd_${ci.replace(/\s/g, '_')}">0</span>
+                  <span class="count">${customIndustryCounts[ci] || 0}</span>
                 </a>
               `).join('')}
             </div>
