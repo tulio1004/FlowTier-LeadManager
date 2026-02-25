@@ -45,7 +45,7 @@ const STAGES = [
 const DEFAULT_INDUSTRIES = [
   'Construction', 'Landscaping', 'Roofing', 'HVAC', 'Salon/Spa', 'Solar',
   'Dental', 'Healthcare', 'Real Estate', 'Legal',
-  'Insurance', 'Home Services', 'Marketing Agency', 'Education', 'Other'
+  'Insurance', 'Home Services', 'Marketing Agency', 'Education'
 ];
 
 const DEFAULT_SOURCES = ['Website', 'Scraper', 'Instagram', 'Referral', 'Make.com', 'CSV Import', 'Other'];
@@ -237,7 +237,7 @@ function createLeadObject(data) {
     website: data.website || '',
     linkedin: data.linkedin || '',
     address: data.address || '',
-    industry: data.industry || 'Other',
+    industry: data.industry || '',
     company_size: data.company_size || '',
     revenue_estimate: data.revenue_estimate || '',
     lead_source: data.lead_source || '',
@@ -524,7 +524,15 @@ app.get('/api/leads', requireApiOrSession, (req, res) => {
     let leads = getAllLeads();
     const { industry, stage, tag, search, source, sort, order } = req.query;
 
-    if (industry) leads = leads.filter(l => l.industry && l.industry.toLowerCase() === industry.toLowerCase());
+    if (industry) {
+      if (industry.toLowerCase() === 'other') {
+        // 'Other' matches leads with no industry or with a custom industry not in the default list
+        const defaultSet = new Set(getIndustries().map(i => i.toLowerCase()));
+        leads = leads.filter(l => !l.industry || !defaultSet.has(l.industry.toLowerCase()));
+      } else {
+        leads = leads.filter(l => l.industry && l.industry.toLowerCase() === industry.toLowerCase());
+      }
+    }
     if (stage) leads = leads.filter(l => l.stage === stage);
     if (tag) leads = leads.filter(l => l.tags && l.tags.some(t => t.toLowerCase() === tag.toLowerCase()));
     if (source) leads = leads.filter(l => l.lead_source && l.lead_source.toLowerCase().includes(source.toLowerCase()));
@@ -1087,7 +1095,14 @@ app.get('/api/export/csv', requireAuth, (req, res) => {
     const { industry, stage } = req.query;
 
     let filtered = leads;
-    if (industry) filtered = filtered.filter(l => l.industry && l.industry.toLowerCase() === industry.toLowerCase());
+    if (industry) {
+      if (industry.toLowerCase() === 'other') {
+        const defaultSet = new Set(getIndustries().map(i => i.toLowerCase()));
+        filtered = filtered.filter(l => !l.industry || !defaultSet.has(l.industry.toLowerCase()));
+      } else {
+        filtered = filtered.filter(l => l.industry && l.industry.toLowerCase() === industry.toLowerCase());
+      }
+    }
     if (stage) filtered = filtered.filter(l => l.stage === stage);
 
     const headers = [
@@ -1268,7 +1283,7 @@ app.post('/api/import/csv', requireAuth, csvUpload.single('file'), (req, res) =>
         website: row['website'] || row['url'] || '',
         linkedin: row['linkedin'] || row['linkedin url'] || '',
         address: row['address'] || '',
-        industry: row['industry'] || 'Other',
+        industry: row['industry'] || '',
         company_size: row['company size'] || row['company_size'] || row['size'] || '',
         revenue_estimate: row['revenue estimate'] || row['revenue_estimate'] || row['revenue'] || '',
         lead_source: row['lead source'] || row['lead_source'] || row['source'] || 'CSV Import',
@@ -1363,13 +1378,14 @@ app.get('/api/stats', requireApiOrSession, (req, res) => {
 
     const weekAgo = new Date(now - 7 * 86400000).toISOString();
     const monthAgo = new Date(now - 30 * 86400000).toISOString();
+    const statsDefaultIndSet = new Set(getIndustries().map(i => i.toLowerCase()));
 
     leads.forEach(l => {
       if (byStage[l.stage]) {
         byStage[l.stage].count++;
         byStage[l.stage].deal_value += (l.deal_value || 0);
       }
-      const ind = l.industry || 'Other';
+      const ind = (l.industry && statsDefaultIndSet.has(l.industry.toLowerCase())) ? l.industry : (l.industry || 'Other');
       if (!byIndustry[ind]) byIndustry[ind] = 0;
       byIndustry[ind]++;
 
