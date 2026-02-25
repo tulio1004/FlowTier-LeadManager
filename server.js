@@ -44,9 +44,8 @@ const STAGES = [
 // ============================================
 const DEFAULT_INDUSTRIES = [
   'Construction', 'Landscaping', 'Roofing', 'HVAC', 'Salon/Spa', 'Solar',
-  'Dental', 'Healthcare', 'Real Estate', 'Legal', 'Financial Services',
-  'Insurance', 'Home Services', 'Restaurants', 'E-commerce', 'SaaS',
-  'Marketing Agency', 'Education', 'Fitness', 'Other'
+  'Dental', 'Healthcare', 'Real Estate', 'Legal',
+  'Insurance', 'Home Services', 'Marketing Agency', 'Education', 'Other'
 ];
 
 const DEFAULT_SOURCES = ['Website', 'Scraper', 'Instagram', 'Referral', 'Make.com', 'CSV Import', 'Other'];

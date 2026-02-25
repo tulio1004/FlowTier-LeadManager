@@ -304,13 +304,56 @@
         </a>
       `).join('');
 
+      // Separate default industries from custom ones
+      const defaultIndustries = industries.filter(ind => ind !== 'Other');
+      
+      // Find custom industries: industries used by leads that aren't in the default list
+      const customIndustries = [];
+      const defaultSet = new Set(industries.map(i => i.toLowerCase()));
+      allLeads.forEach(l => {
+        if (l.industry && !defaultSet.has(l.industry.toLowerCase())) {
+          if (!customIndustries.includes(l.industry)) customIndustries.push(l.industry);
+        }
+      });
+      customIndustries.sort();
+
       const industryNav = document.getElementById('industryNav');
-      industryNav.innerHTML = industries.map(ind => `
+      let html = defaultIndustries.map(ind => `
         <a href="/industry/${encodeURIComponent(ind)}" class="nav-item ${currentIndustryFilter === ind ? 'active' : ''}">
           <span class="icon">&#128193;</span> ${ind}
           <span class="count" id="countInd_${ind.replace(/\s/g, '_')}">0</span>
         </a>
       `).join('');
+
+      // "Other" with expandable custom industries
+      const otherCount = allLeads.filter(l => {
+        if (!l.industry) return true;
+        return !defaultSet.has(l.industry.toLowerCase()) || l.industry.toLowerCase() === 'other';
+      }).length;
+      const otherActive = currentIndustryFilter === 'Other' || customIndustries.includes(currentIndustryFilter);
+      const otherExpanded = otherActive || customIndustries.length > 0;
+
+      html += `
+        <div class="nav-item-group">
+          <a href="/industry/Other" class="nav-item ${currentIndustryFilter === 'Other' ? 'active' : ''}" style="position:relative;">
+            <span class="icon">&#128193;</span> Other
+            <span class="count" id="countInd_Other">${otherCount}</span>
+            ${customIndustries.length > 0 ? '<span class="expand-toggle" onclick="event.preventDefault();event.stopPropagation();this.closest(\'.nav-item-group\').classList.toggle(\'expanded\');" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:0.7rem;color:var(--color-text-muted);padding:4px;">&#9660;</span>' : ''}
+          </a>
+          ${customIndustries.length > 0 ? `
+            <div class="custom-industries-sub ${otherExpanded ? 'expanded' : ''}">
+              ${customIndustries.map(ci => `
+                <a href="/industry/${encodeURIComponent(ci)}" class="nav-item sub-item ${currentIndustryFilter === ci ? 'active' : ''}" style="padding-left:36px;font-size:0.75rem;">
+                  <span class="icon" style="font-size:0.65rem;">&#9702;</span> ${ci}
+                  <span class="count" id="countInd_${ci.replace(/\s/g, '_')}">0</span>
+                </a>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      industryNav.innerHTML = html;
     }
 
     // ════════════════════════════════════════

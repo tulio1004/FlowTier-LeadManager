@@ -137,6 +137,30 @@ a:hover { text-decoration: underline; }
 }
 .sidebar-footer a:hover { color: var(--color-text); text-decoration: none; }
 
+/* ── Custom Industries Sub-menu ── */
+.nav-item-group { position: relative; }
+.custom-industries-sub {
+  display: none;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.custom-industries-sub.expanded,
+.nav-item-group.expanded .custom-industries-sub {
+  display: block;
+}
+.nav-item.sub-item {
+  opacity: 0.85;
+}
+.nav-item.sub-item:hover {
+  opacity: 1;
+}
+.expand-toggle:hover {
+  color: var(--color-text) !important;
+}
+.nav-item-group.expanded .expand-toggle {
+  transform: translateY(-50%) rotate(180deg) !important;
+}
+
 /* ── Mobile sidebar toggle ── */
 .mobile-menu-btn {
   display: none;
