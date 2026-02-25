@@ -43,9 +43,10 @@ const STAGES = [
 // DEFAULT INDUSTRIES & SOURCES
 // ============================================
 const DEFAULT_INDUSTRIES = [
+  'Construction', 'Landscaping', 'Roofing', 'HVAC', 'Salon/Spa', 'Solar',
   'Dental', 'Healthcare', 'Real Estate', 'Legal', 'Financial Services',
   'Insurance', 'Home Services', 'Restaurants', 'E-commerce', 'SaaS',
-  'Marketing Agency', 'Construction', 'Education', 'Fitness', 'Other'
+  'Marketing Agency', 'Education', 'Fitness', 'Other'
 ];
 
 const DEFAULT_SOURCES = ['Website', 'Scraper', 'Instagram', 'Referral', 'Make.com', 'CSV Import', 'Other'];
@@ -485,7 +486,7 @@ app.get('/industry/:industry', requireAuth, (req, res) => {
 });
 
 app.get('/import', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'csv-import.html'));
+  res.sendFile(path.join(__dirname, 'public', 'import.html'));
 });
 
 app.get('/dev', requireAuth, (req, res) => {
