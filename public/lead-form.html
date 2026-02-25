@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Lead — FlowTier Leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <img src="/static/images/logo.webp" alt="FlowTier">
+        <div class="app-label">Lead Management</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item"><span class="icon">&#8592;</span> Back to Dashboard</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
+        <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <div class="page-header">
+        <h1 id="pageTitle">New <span>Lead</span></h1>
+        <div class="header-actions">
+          <a href="/" class="btn btn-secondary btn-sm">Cancel</a>
+          <button class="btn btn-primary" id="saveBtn">&#10003; Save Lead</button>
+        </div>
+      </div>
+
+      <div style="max-width:800px;">
+
+        <!-- Contact Info -->
+        <div class="form-section">
+          <h3>Contact Information</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Contact Name</label>
+              <input type="text" id="contactName" placeholder="John Smith">
+            </div>
+            <div class="form-group">
+              <label>Company Name</label>
+              <input type="text" id="companyName" placeholder="Acme Corp">
+            </div>
+            <div class="form-group full-width">
+              <label>Email(s) <span style="font-weight:400;text-transform:none;letter-spacing:0;">(comma separated for multiple)</span></label>
+              <input type="text" id="emails" placeholder="john@acme.com, info@acme.com">
+            </div>
+            <div class="form-group full-width">
+              <label>Phone(s) <span style="font-weight:400;text-transform:none;letter-spacing:0;">(comma separated for multiple)</span></label>
+              <input type="text" id="phones" placeholder="+1 555-123-4567, +1 555-987-6543">
+            </div>
+            <div class="form-group">
+              <label>Website</label>
+              <input type="url" id="website" placeholder="https://acme.com">
+            </div>
+            <div class="form-group">
+              <label>LinkedIn URL</label>
+              <input type="url" id="linkedin" placeholder="https://linkedin.com/in/johnsmith">
+            </div>
+            <div class="form-group full-width">
+              <label>Address</label>
+              <input type="text" id="address" placeholder="123 Main St, Boston, MA 02101">
+            </div>
+          </div>
+        </div>
+
+        <!-- Company Details -->
+        <div class="form-section">
+          <h3>Company Details</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Industry</label>
+              <select id="industry"></select>
+            </div>
+            <div class="form-group">
+              <label>Company Size</label>
+              <select id="companySize">
+                <option value="">Select...</option>
+                <option value="1-10">1-10 employees</option>
+                <option value="11-50">11-50 employees</option>
+                <option value="51-200">51-200 employees</option>
+                <option value="201-500">201-500 employees</option>
+                <option value="500+">500+ employees</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Revenue Estimate</label>
+              <input type="text" id="revenueEstimate" placeholder="$1M - $5M">
+            </div>
+            <div class="form-group">
+              <label>Lead Source</label>
+              <input type="text" id="leadSource" placeholder="Make.com, Referral, Cold Outreach...">
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline -->
+        <div class="form-section">
+          <h3>Pipeline</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Stage</label>
+              <select id="stage"></select>
+            </div>
+            <div class="form-group">
+              <label>Deal Value ($)</label>
+              <input type="number" id="dealValue" placeholder="5000" min="0" step="100">
+            </div>
+            <div class="form-group">
+              <label>Assigned To</label>
+              <input type="text" id="assignedTo" placeholder="Team member name">
+            </div>
+            <div class="form-group">
+              <label>Next Follow-up Date</label>
+              <input type="datetime-local" id="nextFollowup">
+            </div>
+            <div class="form-group full-width">
+              <label>Tags <span style="font-weight:400;text-transform:none;letter-spacing:0;">(comma separated)</span></label>
+              <input type="text" id="tags" placeholder="high-priority, dental, follow-up-needed">
+            </div>
+            <div class="form-group full-width">
+              <label>Proposal URL</label>
+              <input type="url" id="proposalUrl" placeholder="https://proposals.flowtier.io/acme-corp-2026">
+            </div>
+          </div>
+        </div>
+
+        <!-- Enrichment -->
+        <div class="form-section">
+          <h3>Enrichment Data / Details</h3>
+          <div class="form-group" style="margin-bottom:0;">
+            <textarea id="details" rows="6" placeholder="Paste enrichment data, research notes, or any relevant details about this lead..."></textarea>
+          </div>
+        </div>
+
+        <!-- Calendar Event (for Call Booked) -->
+        <div class="form-section" id="calendarSection">
+          <h3>Calendar Event <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.75rem;color:var(--color-text-muted);">(optional — for Call Booked stage)</span></h3>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label>Event Title</label>
+              <input type="text" id="calTitle" placeholder="Discovery Call with Acme Corp">
+            </div>
+            <div class="form-group">
+              <label>Start Time</label>
+              <input type="datetime-local" id="calStart">
+            </div>
+            <div class="form-group">
+              <label>End Time</label>
+              <input type="datetime-local" id="calEnd">
+            </div>
+            <div class="form-group">
+              <label>Meeting Link</label>
+              <input type="url" id="calMeetLink" placeholder="https://meet.google.com/...">
+            </div>
+            <div class="form-group">
+              <label>Google Calendar Event ID</label>
+              <input type="text" id="calEventId" placeholder="abc123xyz">
+            </div>
+            <div class="form-group full-width">
+              <label>Description</label>
+              <textarea id="calDescription" rows="3" placeholder="Call agenda, topics to discuss..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- JSON Import -->
+        <div class="form-section">
+          <h3>JSON Import <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.75rem;color:var(--color-text-muted);">(paste lead JSON to auto-fill)</span></h3>
+          <div class="form-group" style="margin-bottom:8px;">
+            <textarea id="jsonImport" rows="4" placeholder='{"company_name": "Acme Corp", "contact_name": "John Smith", ...}'></textarea>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="parseJsonBtn">Parse JSON</button>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let editId = null;
+    let stages = [];
+    let industries = [];
+
+    // Check if editing
+    const pathParts = window.location.pathname.split('/');
+    if (pathParts[1] === 'edit' && pathParts[2]) {
+      editId = pathParts[2];
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const [stagesRes, industriesRes] = await Promise.all([
+        fetch('/api/stages').then(r => r.json()),
+        fetch('/api/industries').then(r => r.json())
+      ]);
+      stages = stagesRes.stages;
+      industries = industriesRes.industries;
+
+      // Populate selects
+      document.getElementById('industry').innerHTML =
+        '<option value="">Select Industry...</option>' +
+        industries.map(i => `<option value="${i}">${i}</option>`).join('');
+
+      document.getElementById('stage').innerHTML =
+        stages.map(s => `<option value="${s.id}">${s.label} — ${s.description}</option>`).join('');
+
+      if (editId) {
+        document.getElementById('pageTitle').innerHTML = 'Edit <span>Lead</span>';
+        document.title = 'Edit Lead — FlowTier Leads';
+        await loadExisting();
+      }
+
+      setupEvents();
+    });
+
+    async function loadExisting() {
+      const res = await fetch('/api/leads/' + editId);
+      if (!res.ok) return;
+      const lead = await res.json();
+
+      document.getElementById('contactName').value = lead.contact_name || '';
+      document.getElementById('companyName').value = lead.company_name || '';
+      document.getElementById('emails').value = (lead.emails || []).join(', ');
+      document.getElementById('phones').value = (lead.phones || []).join(', ');
+      document.getElementById('website').value = lead.website || '';
+      document.getElementById('linkedin').value = lead.linkedin || '';
+      document.getElementById('address').value = lead.address || '';
+      document.getElementById('industry').value = lead.industry || '';
+      document.getElementById('companySize').value = lead.company_size || '';
+      document.getElementById('revenueEstimate').value = lead.revenue_estimate || '';
+      document.getElementById('leadSource').value = lead.lead_source || '';
+      document.getElementById('stage').value = lead.stage || 'cold';
+      document.getElementById('dealValue').value = lead.deal_value || '';
+      document.getElementById('assignedTo').value = lead.assigned_to || '';
+      document.getElementById('tags').value = (lead.tags || []).join(', ');
+      document.getElementById('proposalUrl').value = lead.proposal_url || '';
+      document.getElementById('details').value = lead.details || '';
+
+      if (lead.next_followup) {
+        document.getElementById('nextFollowup').value = lead.next_followup.slice(0, 16);
+      }
+
+      // Calendar
+      if (lead.calendar_event) {
+        document.getElementById('calTitle').value = lead.calendar_event.title || '';
+        if (lead.calendar_event.start_time) document.getElementById('calStart').value = lead.calendar_event.start_time.slice(0, 16);
+        if (lead.calendar_event.end_time) document.getElementById('calEnd').value = lead.calendar_event.end_time.slice(0, 16);
+        document.getElementById('calMeetLink').value = lead.calendar_event.meet_link || '';
+        document.getElementById('calEventId').value = lead.calendar_event.event_id || '';
+        document.getElementById('calDescription').value = lead.calendar_event.description || '';
+      }
+    }
+
+    function setupEvents() {
+      document.getElementById('saveBtn').addEventListener('click', saveLead);
+
+      document.getElementById('parseJsonBtn').addEventListener('click', () => {
+        try {
+          const json = JSON.parse(document.getElementById('jsonImport').value);
+          fillFromJson(json);
+          showToast('JSON parsed and fields populated', 'success');
+        } catch (e) {
+          showToast('Invalid JSON: ' + e.message, 'error');
+        }
+      });
+    }
+
+    function fillFromJson(data) {
+      if (data.contact_name) document.getElementById('contactName').value = data.contact_name;
+      if (data.company_name) document.getElementById('companyName').value = data.company_name;
+      if (data.emails) document.getElementById('emails').value = Array.isArray(data.emails) ? data.emails.join(', ') : data.emails;
+      if (data.email) document.getElementById('emails').value = data.email;
+      if (data.phones) document.getElementById('phones').value = Array.isArray(data.phones) ? data.phones.join(', ') : data.phones;
+      if (data.phone) document.getElementById('phones').value = data.phone;
+      if (data.website) document.getElementById('website').value = data.website;
+      if (data.linkedin) document.getElementById('linkedin').value = data.linkedin;
+      if (data.address) document.getElementById('address').value = data.address;
+      if (data.industry) document.getElementById('industry').value = data.industry;
+      if (data.company_size) document.getElementById('companySize').value = data.company_size;
+      if (data.revenue_estimate) document.getElementById('revenueEstimate').value = data.revenue_estimate;
+      if (data.lead_source) document.getElementById('leadSource').value = data.lead_source;
+      if (data.stage) document.getElementById('stage').value = data.stage;
+      if (data.deal_value) document.getElementById('dealValue').value = data.deal_value;
+      if (data.assigned_to) document.getElementById('assignedTo').value = data.assigned_to;
+      if (data.tags) document.getElementById('tags').value = Array.isArray(data.tags) ? data.tags.join(', ') : data.tags;
+      if (data.proposal_url) document.getElementById('proposalUrl').value = data.proposal_url;
+      if (data.details) document.getElementById('details').value = data.details;
+    }
+
+    async function saveLead() {
+      const emailsRaw = document.getElementById('emails').value;
+      const phonesRaw = document.getElementById('phones').value;
+      const tagsRaw = document.getElementById('tags').value;
+
+      const payload = {
+        contact_name: document.getElementById('contactName').value.trim(),
+        company_name: document.getElementById('companyName').value.trim(),
+        emails: emailsRaw.split(',').map(e => e.trim()).filter(Boolean),
+        phones: phonesRaw.split(',').map(p => p.trim()).filter(Boolean),
+        website: document.getElementById('website').value.trim(),
+        linkedin: document.getElementById('linkedin').value.trim(),
+        address: document.getElementById('address').value.trim(),
+        industry: document.getElementById('industry').value,
+        company_size: document.getElementById('companySize').value,
+        revenue_estimate: document.getElementById('revenueEstimate').value.trim(),
+        lead_source: document.getElementById('leadSource').value.trim(),
+        stage: document.getElementById('stage').value,
+        deal_value: parseFloat(document.getElementById('dealValue').value) || 0,
+        assigned_to: document.getElementById('assignedTo').value.trim(),
+        tags: tagsRaw.split(',').map(t => t.trim()).filter(Boolean),
+        proposal_url: document.getElementById('proposalUrl').value.trim(),
+        details: document.getElementById('details').value.trim(),
+        next_followup: document.getElementById('nextFollowup').value ? new Date(document.getElementById('nextFollowup').value).toISOString() : null,
+        _source: 'manual'
+      };
+
+      // Calendar event
+      const calTitle = document.getElementById('calTitle').value.trim();
+      const calStart = document.getElementById('calStart').value;
+      if (calTitle || calStart) {
+        payload.calendar_event = {
+          event_id: document.getElementById('calEventId').value.trim(),
+          title: calTitle,
+          start_time: calStart ? new Date(calStart).toISOString() : '',
+          end_time: document.getElementById('calEnd').value ? new Date(document.getElementById('calEnd').value).toISOString() : '',
+          meet_link: document.getElementById('calMeetLink').value.trim(),
+          description: document.getElementById('calDescription').value.trim(),
+          attendees: []
+        };
+      }
+
+      if (!payload.company_name && !payload.contact_name) {
+        showToast('Please enter at least a company name or contact name', 'error');
+        return;
+      }
+
+      try {
+        let res;
+        if (editId) {
+          res = await fetch('/api/leads/' + editId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } else {
+          res = await fetch('/api/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
+
+        const data = await res.json();
+        if (data.success) {
+          showToast(editId ? 'Lead updated' : 'Lead created', 'success');
+          setTimeout(() => {
+            window.location.href = '/lead/' + data.lead.id;
+          }, 500);
+        } else {
+          showToast(data.error || 'Failed to save', 'error');
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+      }
+    }
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type;
+      setTimeout(() => t.classList.add('visible'), 10);
+      setTimeout(() => t.classList.remove('visible'), 3000);
+    }
+  </script>
+</body>
+</html>

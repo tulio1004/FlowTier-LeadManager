@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — FlowTier Leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <img src="/static/images/logo.webp" alt="FlowTier">
+      <h2>Lead Management</h2>
+      <div class="login-error" id="loginError" style="display:none">Invalid username or password.</div>
+      <form method="POST" action="/login">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required autofocus placeholder="Enter username">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required placeholder="Enter password">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:12px;margin-top:8px;">Sign In</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    if (window.location.search.includes('error=1')) {
+      document.getElementById('loginError').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

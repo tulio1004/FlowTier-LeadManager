@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — FlowTier Leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <img src="/static/images/logo.webp" alt="FlowTier">
+        <div class="app-label">Lead Management</div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Pipeline</div>
+        <a href="/" class="nav-item active" data-view="all">
+          <span class="icon">&#9776;</span> All Leads <span class="count" id="countAll">0</span>
+        </a>
+        <div id="stageNav"></div>
+
+        <div class="nav-section-label">Industries</div>
+        <div id="industryNav"></div>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
+        <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <!-- Header -->
+      <div class="page-header">
+        <h1 id="pageTitle">All <span>Leads</span></h1>
+        <div class="header-actions">
+          <a href="/api/export/csv" class="btn btn-secondary btn-sm" id="exportBtn">&#8681; Export CSV</a>
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+            &#8679; Import CSV
+            <input type="file" accept=".csv" id="importCsvInput" style="display:none;">
+          </label>
+          <a href="/new" class="btn btn-primary">&#43; New Lead</a>
+        </div>
+      </div>
+
+      <!-- Pipeline Bar -->
+      <div class="pipeline-bar" id="pipelineBar"></div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="searchInput" placeholder="Search leads by name, company, email, tag...">
+        </div>
+        <select class="filter-select" id="industryFilter">
+          <option value="">All Industries</option>
+        </select>
+        <select class="filter-select" id="sourceFilter">
+          <option value="">All Sources</option>
+        </select>
+      </div>
+
+      <!-- Bulk Actions -->
+      <div class="bulk-bar" id="bulkBar">
+        <span class="bulk-count" id="bulkCount">0</span> selected
+        <select class="filter-select" id="bulkStageSelect" style="margin-left:auto;">
+          <option value="">Change Stage...</option>
+        </select>
+        <button class="btn btn-sm btn-secondary" id="bulkApplyStage">Apply</button>
+        <button class="btn btn-sm btn-danger" id="bulkDeleteBtn">Delete</button>
+        <button class="btn btn-sm btn-secondary" id="bulkClearBtn">Clear</button>
+      </div>
+
+      <!-- Table -->
+      <div style="overflow-x:auto;">
+        <table class="lead-table" id="leadTable">
+          <thead>
+            <tr>
+              <th class="checkbox-cell"><input type="checkbox" id="selectAll"></th>
+              <th>Company</th>
+              <th>Contact</th>
+              <th>Email</th>
+              <th>Industry</th>
+              <th>Stage</th>
+              <th>Tags</th>
+              <th>Deal Value</th>
+              <th>Updated</th>
+              <th class="actions-cell"></th>
+            </tr>
+          </thead>
+          <tbody id="leadTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="icon">&#128203;</div>
+        <h3>No leads found</h3>
+        <p>Create your first lead or import from CSV.</p>
+        <a href="/new" class="btn btn-primary">&#43; New Lead</a>
+      </div>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ════════════════════════════════════════
+    // STATE
+    // ════════════════════════════════════════
+    let allLeads = [];
+    let stages = [];
+    let industries = [];
+    let selectedIds = new Set();
+    let currentStageFilter = '';
+    let currentIndustryFilter = '';
+
+    // Check if we're on an industry page
+    const pathParts = window.location.pathname.split('/');
+    if (pathParts[1] === 'industry' && pathParts[2]) {
+      currentIndustryFilter = decodeURIComponent(pathParts[2]);
+    }
+
+    // ════════════════════════════════════════
+    // INIT
+    // ════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadConfig();
+      await loadLeads();
+      setupEvents();
+    });
+
+    async function loadConfig() {
+      const [stagesRes, industriesRes] = await Promise.all([
+        fetch('/api/stages').then(r => r.json()),
+        fetch('/api/industries').then(r => r.json())
+      ]);
+      stages = stagesRes.stages;
+      industries = industriesRes.industries;
+      renderSidebar();
+      renderPipeline();
+      renderFilters();
+    }
+
+    async function loadLeads() {
+      const params = new URLSearchParams();
+      if (currentIndustryFilter) params.set('industry', currentIndustryFilter);
+      if (currentStageFilter) params.set('stage', currentStageFilter);
+
+      const searchVal = document.getElementById('searchInput').value.trim();
+      if (searchVal) params.set('search', searchVal);
+
+      const industryVal = document.getElementById('industryFilter').value;
+      if (industryVal && !currentIndustryFilter) params.set('industry', industryVal);
+
+      const res = await fetch('/api/leads?' + params.toString());
+      const data = await res.json();
+      allLeads = data.leads || [];
+      renderTable();
+      updateCounts();
+    }
+
+    // ════════════════════════════════════════
+    // RENDER SIDEBAR
+    // ════════════════════════════════════════
+    function renderSidebar() {
+      // Stage nav
+      const stageNav = document.getElementById('stageNav');
+      stageNav.innerHTML = stages.map(s => `
+        <a href="#" class="nav-item ${currentStageFilter === s.id ? 'active' : ''}" data-stage="${s.id}" onclick="filterByStage('${s.id}', event)">
+          <span class="icon" style="color:${s.color};">&#9679;</span> ${s.label}
+          <span class="count" id="countStage_${s.id}">0</span>
+        </a>
+      `).join('');
+
+      // Industry nav
+      const industryNav = document.getElementById('industryNav');
+      industryNav.innerHTML = industries.map(ind => `
+        <a href="/industry/${encodeURIComponent(ind)}" class="nav-item ${currentIndustryFilter === ind ? 'active' : ''}">
+          <span class="icon">&#128193;</span> ${ind}
+          <span class="count" id="countInd_${ind.replace(/\s/g, '_')}">0</span>
+        </a>
+      `).join('');
+    }
+
+    // ════════════════════════════════════════
+    // RENDER PIPELINE BAR
+    // ════════════════════════════════════════
+    function renderPipeline() {
+      const bar = document.getElementById('pipelineBar');
+      bar.innerHTML = stages.map(s => `
+        <div class="pipeline-card ${currentStageFilter === s.id ? 'active' : ''}" onclick="filterByStage('${s.id}')" style="cursor:pointer;">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${s.color};"></div>
+          <div class="pipeline-count" id="pipeCount_${s.id}" style="color:${s.color};">0</div>
+          <div class="pipeline-label">${s.label}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderFilters() {
+      const indFilter = document.getElementById('industryFilter');
+      indFilter.innerHTML = '<option value="">All Industries</option>' +
+        industries.map(i => `<option value="${i}" ${currentIndustryFilter === i ? 'selected' : ''}>${i}</option>`).join('');
+
+      // Bulk stage select
+      const bulkStage = document.getElementById('bulkStageSelect');
+      bulkStage.innerHTML = '<option value="">Change Stage...</option>' +
+        stages.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    }
+
+    // ════════════════════════════════════════
+    // RENDER TABLE
+    // ════════════════════════════════════════
+    function renderTable() {
+      const tbody = document.getElementById('leadTableBody');
+      const empty = document.getElementById('emptyState');
+
+      if (allLeads.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      tbody.innerHTML = allLeads.map(l => {
+        const stage = stages.find(s => s.id === l.stage) || { label: l.stage, color: '#78909C' };
+        const emails = (l.emails || []).join(', ');
+        const tags = (l.tags || []).map(t => `<span class="tag-chip">${esc(t)}</span>`).join('');
+        const dealVal = l.deal_value ? '$' + Number(l.deal_value).toLocaleString() : '—';
+        const updated = l.updated_at ? timeAgo(l.updated_at) : '—';
+
+        return `<tr class="${selectedIds.has(l.id) ? 'selected' : ''}" data-id="${l.id}">
+          <td class="checkbox-cell"><input type="checkbox" ${selectedIds.has(l.id) ? 'checked' : ''} onchange="toggleSelect('${l.id}')"></td>
+          <td class="company-cell"><a href="/lead/${l.id}" style="color:inherit;text-decoration:none;">${esc(l.company_name || '—')}</a></td>
+          <td class="contact-cell">${esc(l.contact_name || '—')}</td>
+          <td class="email-cell">${esc(emails || '—')}</td>
+          <td>${esc(l.industry || '—')}</td>
+          <td><span class="stage-badge" style="background:${stage.color}20;color:${stage.color};">${stage.label}</span></td>
+          <td>${tags || '—'}</td>
+          <td>${dealVal}</td>
+          <td style="font-size:0.75rem;color:var(--color-text-muted);">${updated}</td>
+          <td class="actions-cell">
+            <a href="/edit/${l.id}" class="btn-icon" title="Edit" style="display:inline-flex;">&#9998;</a>
+            <button class="btn-icon" title="Delete" onclick="deleteLead('${l.id}')" style="display:inline-flex;">&#128465;</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function updateCounts() {
+      // Fetch fresh stats
+      fetch('/api/stats').then(r => r.json()).then(data => {
+        document.getElementById('countAll').textContent = data.total_leads;
+        stages.forEach(s => {
+          const el = document.getElementById('countStage_' + s.id);
+          const pel = document.getElementById('pipeCount_' + s.id);
+          const count = data.by_stage[s.id] ? data.by_stage[s.id].count : 0;
+          if (el) el.textContent = count;
+          if (pel) pel.textContent = count;
+        });
+        // Industry counts
+        Object.keys(data.by_industry || {}).forEach(ind => {
+          const el = document.getElementById('countInd_' + ind.replace(/\s/g, '_'));
+          if (el) el.textContent = data.by_industry[ind];
+        });
+      });
+    }
+
+    // ════════════════════════════════════════
+    // FILTERS
+    // ════════════════════════════════════════
+    function filterByStage(stageId, e) {
+      if (e) e.preventDefault();
+      if (currentStageFilter === stageId) {
+        currentStageFilter = '';
+      } else {
+        currentStageFilter = stageId;
+      }
+      // Update active states
+      document.querySelectorAll('[data-stage]').forEach(el => {
+        el.classList.toggle('active', el.dataset.stage === currentStageFilter);
+      });
+      document.querySelectorAll('.pipeline-card').forEach(el => el.classList.remove('active'));
+      if (currentStageFilter) {
+        const activeCard = document.querySelector(`.pipeline-card[onclick*="${currentStageFilter}"]`);
+        if (activeCard) activeCard.classList.add('active');
+      }
+      // Update title
+      if (currentStageFilter) {
+        const s = stages.find(s => s.id === currentStageFilter);
+        document.getElementById('pageTitle').innerHTML = `${s ? s.label : ''} <span>Leads</span>`;
+      } else {
+        document.getElementById('pageTitle').innerHTML = currentIndustryFilter ? `${currentIndustryFilter} <span>Leads</span>` : 'All <span>Leads</span>';
+      }
+      loadLeads();
+    }
+
+    // ════════════════════════════════════════
+    // EVENTS
+    // ════════════════════════════════════════
+    function setupEvents() {
+      let searchTimeout;
+      document.getElementById('searchInput').addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(loadLeads, 300);
+      });
+
+      document.getElementById('industryFilter').addEventListener('change', () => {
+        currentIndustryFilter = document.getElementById('industryFilter').value;
+        loadLeads();
+      });
+
+      document.getElementById('selectAll').addEventListener('change', (e) => {
+        if (e.target.checked) {
+          allLeads.forEach(l => selectedIds.add(l.id));
+        } else {
+          selectedIds.clear();
+        }
+        renderTable();
+        updateBulkBar();
+      });
+
+      document.getElementById('bulkApplyStage').addEventListener('click', bulkChangeStage);
+      document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDelete);
+      document.getElementById('bulkClearBtn').addEventListener('click', () => {
+        selectedIds.clear();
+        document.getElementById('selectAll').checked = false;
+        renderTable();
+        updateBulkBar();
+      });
+
+      // CSV import
+      document.getElementById('importCsvInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const res = await fetch('/api/import/csv', { method: 'POST', body: formData });
+          const data = await res.json();
+          if (data.success) {
+            showToast(`Imported ${data.imported} leads`, 'success');
+            loadLeads();
+          } else {
+            showToast(data.error || 'Import failed', 'error');
+          }
+        } catch (err) {
+          showToast('Import failed: ' + err.message, 'error');
+        }
+        e.target.value = '';
+      });
+
+      // Update export link with filters
+      const exportBtn = document.getElementById('exportBtn');
+      const origHref = exportBtn.href;
+      setInterval(() => {
+        const params = new URLSearchParams();
+        if (currentIndustryFilter) params.set('industry', currentIndustryFilter);
+        if (currentStageFilter) params.set('stage', currentStageFilter);
+        exportBtn.href = '/api/export/csv' + (params.toString() ? '?' + params.toString() : '');
+      }, 500);
+
+      // Update page title for industry view
+      if (currentIndustryFilter) {
+        document.getElementById('pageTitle').innerHTML = `${currentIndustryFilter} <span>Leads</span>`;
+        document.title = `${currentIndustryFilter} — FlowTier Leads`;
+      }
+    }
+
+    // ════════════════════════════════════════
+    // SELECTION & BULK
+    // ════════════════════════════════════════
+    function toggleSelect(id) {
+      if (selectedIds.has(id)) selectedIds.delete(id);
+      else selectedIds.add(id);
+      renderTable();
+      updateBulkBar();
+    }
+
+    function updateBulkBar() {
+      const bar = document.getElementById('bulkBar');
+      const count = document.getElementById('bulkCount');
+      if (selectedIds.size > 0) {
+        bar.classList.add('visible');
+        count.textContent = selectedIds.size;
+      } else {
+        bar.classList.remove('visible');
+      }
+    }
+
+    async function bulkChangeStage() {
+      const stage = document.getElementById('bulkStageSelect').value;
+      if (!stage || selectedIds.size === 0) return;
+      const res = await fetch('/api/leads/bulk/stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds], stage })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Updated ${data.updated} leads`, 'success');
+        selectedIds.clear();
+        document.getElementById('selectAll').checked = false;
+        updateBulkBar();
+        loadLeads();
+      }
+    }
+
+    async function bulkDelete() {
+      if (!confirm(`Delete ${selectedIds.size} leads? This cannot be undone.`)) return;
+      const res = await fetch('/api/leads/bulk/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Deleted ${data.deleted} leads`, 'success');
+        selectedIds.clear();
+        document.getElementById('selectAll').checked = false;
+        updateBulkBar();
+        loadLeads();
+      }
+    }
+
+    // ════════════════════════════════════════
+    // DELETE
+    // ════════════════════════════════════════
+    async function deleteLead(id) {
+      if (!confirm('Delete this lead?')) return;
+      await fetch('/api/leads/' + id, { method: 'DELETE' });
+      showToast('Lead deleted', 'success');
+      loadLeads();
+    }
+
+    // ════════════════════════════════════════
+    // HELPERS
+    // ════════════════════════════════════════
+    function esc(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function timeAgo(dateStr) {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return mins + 'm ago';
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + 'h ago';
+      const days = Math.floor(hrs / 24);
+      if (days < 30) return days + 'd ago';
+      return new Date(dateStr).toLocaleDateString();
+    }
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type;
+      setTimeout(() => t.classList.add('visible'), 10);
+      setTimeout(() => t.classList.remove('visible'), 3000);
+    }
+  </script>
+</body>
+</html>

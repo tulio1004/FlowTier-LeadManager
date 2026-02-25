@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dev Console — FlowTier Leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .dev-section { margin-bottom: 32px; }
+    .dev-section h2 {
+      font-size: 1.125rem; font-weight: 700; margin-bottom: 16px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--color-border);
+    }
+    .dev-section h2 span { color: var(--color-primary); }
+
+    .endpoint-card {
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+    .endpoint-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+    }
+    .method-badge {
+      font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 700;
+      padding: 3px 8px; border-radius: 4px; text-transform: uppercase;
+    }
+    .method-badge.get { background: rgba(100,181,246,0.15); color: #64B5F6; }
+    .method-badge.post { background: rgba(0,230,118,0.15); color: #00E676; }
+    .method-badge.put { background: rgba(255,183,77,0.15); color: #FFB74D; }
+    .method-badge.patch { background: rgba(206,147,216,0.15); color: #CE93D8; }
+    .method-badge.delete { background: rgba(255,82,82,0.15); color: #FF5252; }
+
+    .endpoint-path {
+      font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;
+      color: var(--color-text);
+    }
+    .endpoint-desc {
+      font-size: 0.8125rem; color: var(--color-text-secondary); margin-bottom: 10px;
+    }
+
+    .code-block {
+      background: rgba(0,0,0,0.3); border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-sm); padding: 14px;
+      font-family: var(--font-mono); font-size: 0.75rem;
+      color: var(--color-text-secondary); overflow-x: auto;
+      line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+    }
+    .code-block .key { color: #CE93D8; }
+    .code-block .str { color: #00E676; }
+    .code-block .num { color: #FFB74D; }
+
+    .webhook-config-card {
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .webhook-url-input {
+      display: flex; gap: 10px; margin-top: 10px;
+    }
+    .webhook-url-input input { flex: 1; }
+
+    .test-card {
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+    .test-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .test-card-title {
+      font-size: 0.875rem; font-weight: 700; color: var(--color-text);
+    }
+    .test-card-desc {
+      font-size: 0.8125rem; color: var(--color-text-secondary); margin-bottom: 12px;
+    }
+    .test-result {
+      margin-top: 12px; padding: 12px; border-radius: var(--radius-sm);
+      font-family: var(--font-mono); font-size: 0.75rem;
+      display: none;
+    }
+    .test-result.success { background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); color: var(--color-success); }
+    .test-result.error { background: rgba(255,82,82,0.08); border: 1px solid rgba(255,82,82,0.2); color: var(--color-danger); }
+
+    .payload-toggle {
+      font-size: 0.75rem; color: var(--color-text-muted); cursor: pointer;
+      background: none; border: none; font-family: var(--font-sans);
+      padding: 4px 0;
+    }
+    .payload-toggle:hover { color: var(--color-text-secondary); }
+
+    .tab-bar {
+      display: flex; gap: 0; margin-bottom: 24px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .tab-btn {
+      padding: 10px 20px; font-size: 0.8125rem; font-weight: 600;
+      color: var(--color-text-muted); background: none; border: none;
+      border-bottom: 2px solid transparent; cursor: pointer;
+      font-family: var(--font-sans); transition: var(--transition);
+    }
+    .tab-btn:hover { color: var(--color-text-secondary); }
+    .tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .field-table {
+      width: 100%; border-collapse: collapse; margin-top: 10px;
+    }
+    .field-table th {
+      text-align: left; padding: 8px 12px; font-size: 0.6875rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--color-text-muted); border-bottom: 1px solid var(--color-border);
+      background: var(--color-surface);
+    }
+    .field-table td {
+      padding: 8px 12px; font-size: 0.8125rem; color: var(--color-text-secondary);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .field-table td code {
+      font-family: var(--font-mono); font-size: 0.75rem;
+      background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px;
+      color: var(--color-primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <img src="/static/images/logo.webp" alt="FlowTier">
+        <div class="app-label">Lead Management</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item"><span class="icon">&#8592;</span> Back to Dashboard</a>
+        <div class="nav-section-label">Dev Console</div>
+        <a href="#webhook-testing" class="nav-item active"><span class="icon">&#9889;</span> Webhook Testing</a>
+        <a href="#api-docs" class="nav-item"><span class="icon">&#128196;</span> API Documentation</a>
+        <a href="#data-model" class="nav-item"><span class="icon">&#128202;</span> Data Model</a>
+        <a href="#make-integration" class="nav-item"><span class="icon">&#9881;</span> Make.com Guide</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/logout"><span class="icon">&#10140;</span> Logout</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <div class="page-header">
+        <h1>Dev <span>Console</span></h1>
+      </div>
+
+      <!-- ═══════════════════════════════════ -->
+      <!-- WEBHOOK TESTING                     -->
+      <!-- ═══════════════════════════════════ -->
+      <div class="dev-section" id="webhook-testing">
+        <h2>&#9889; Webhook <span>Testing</span></h2>
+
+        <!-- Webhook Config -->
+        <div class="webhook-config-card">
+          <div style="font-weight:600;margin-bottom:4px;">Webhook URL</div>
+          <div style="font-size:0.8125rem;color:var(--color-text-muted);margin-bottom:10px;">
+            All webhook events will be sent to this URL. Use your Make.com webhook URL or any endpoint.
+          </div>
+          <div class="webhook-url-input">
+            <input type="url" id="webhookUrl" class="form-group" placeholder="https://hook.us2.make.com/..." style="padding:10px 14px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-size:0.8125rem;font-family:var(--font-sans);outline:none;">
+            <button class="btn btn-primary" id="saveWebhookBtn">Save</button>
+          </div>
+          <div id="webhookStatus" style="font-size:0.75rem;margin-top:8px;color:var(--color-text-muted);"></div>
+        </div>
+
+        <!-- Test: Lead Created -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128203; lead_created</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('lead_created')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a new lead is added to the system (via API, CSV import, or manual creation).</div>
+          <button class="payload-toggle" onclick="togglePayload('lead_created')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_lead_created" style="display:none;"></div>
+          <div class="test-result" id="result_lead_created"></div>
+        </div>
+
+        <!-- Test: Lead Stage Changed -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128260; lead_stage_changed</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('lead_stage_changed')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a lead's stage changes (e.g., Cold → Qualified). Includes old and new stage.</div>
+          <button class="payload-toggle" onclick="togglePayload('lead_stage_changed')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_lead_stage_changed" style="display:none;"></div>
+          <div class="test-result" id="result_lead_stage_changed"></div>
+        </div>
+
+        <!-- Test: Lead Call Booked -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128197; lead_call_booked</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('lead_call_booked')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a calendar event is attached to a lead (call scheduled via Make.com or manual).</div>
+          <button class="payload-toggle" onclick="togglePayload('lead_call_booked')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_lead_call_booked" style="display:none;"></div>
+          <div class="test-result" id="result_lead_call_booked"></div>
+        </div>
+
+        <!-- Test: Lead Note Added -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128221; lead_note_added</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('lead_note_added')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a note is added to a lead (call snapshots, follow-up notes, etc.).</div>
+          <button class="payload-toggle" onclick="togglePayload('lead_note_added')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_lead_note_added" style="display:none;"></div>
+          <div class="test-result" id="result_lead_note_added"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ -->
+      <!-- API DOCUMENTATION                   -->
+      <!-- ═══════════════════════════════════ -->
+      <div class="dev-section" id="api-docs">
+        <h2>&#128196; API <span>Documentation</span></h2>
+
+        <div style="font-size:0.8125rem;color:var(--color-text-secondary);margin-bottom:20px;line-height:1.7;">
+          Base URL: <code style="font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:2px 8px;border-radius:4px;color:var(--color-primary);">https://leads.flowtier.io</code><br>
+          All endpoints accept and return JSON. Authentication is via session cookie (dashboard) or <code style="font-family:var(--font-mono);background:rgba(0,0,0,0.3);padding:2px 8px;border-radius:4px;color:var(--color-primary);">X-API-Key</code> header (external).
+          If no API key is configured, all <code>/api/</code> endpoints are open for Make.com integration.
+        </div>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab('leads')">Leads CRUD</button>
+          <button class="tab-btn" onclick="switchTab('notes')">Notes</button>
+          <button class="tab-btn" onclick="switchTab('calendar')">Calendar</button>
+          <button class="tab-btn" onclick="switchTab('bulk')">Bulk Actions</button>
+          <button class="tab-btn" onclick="switchTab('import')">Import / Export</button>
+          <button class="tab-btn" onclick="switchTab('config')">Config</button>
+        </div>
+
+        <!-- LEADS CRUD TAB -->
+        <div class="tab-content active" id="tab-leads">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/leads</span>
+            </div>
+            <div class="endpoint-desc">List all leads with optional filters.</div>
+            <table class="field-table">
+              <thead><tr><th>Query Param</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>industry</code></td><td>string</td><td>Filter by industry name</td></tr>
+                <tr><td><code>stage</code></td><td>string</td><td>Filter by stage ID (cold, contacted, qualified, call_booked, proposal_sent, won, lost)</td></tr>
+                <tr><td><code>tag</code></td><td>string</td><td>Filter by tag name</td></tr>
+                <tr><td><code>search</code></td><td>string</td><td>Full-text search across name, company, email, tags, details</td></tr>
+                <tr><td><code>source</code></td><td>string</td><td>Filter by lead source</td></tr>
+                <tr><td><code>sort</code></td><td>string</td><td>Sort field (default: updated_at)</td></tr>
+                <tr><td><code>order</code></td><td>string</td><td>asc or desc (default: desc)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/leads/:id</span>
+            </div>
+            <div class="endpoint-desc">Get a single lead by ID. Returns the full lead object including notes and activity.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads</span>
+            </div>
+            <div class="endpoint-desc">Create a new lead. This is the primary endpoint for Make.com to send leads.</div>
+            <div class="code-block">{
+  "company_name": "Brightside Dental",
+  "contact_name": "Sarah Mitchell",
+  "emails": ["sarah@brightsidedental.com"],
+  "phones": ["+1 555-123-4567"],
+  "website": "https://brightsidedental.com",
+  "industry": "Dental",
+  "company_size": "11-50",
+  "lead_source": "make.com",
+  "tags": ["high-priority", "dental"],
+  "stage": "cold",
+  "deal_value": 5000,
+  "details": "Enrichment data goes here..."
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge put">PUT</span>
+              <span class="endpoint-path">/api/leads/:id</span>
+            </div>
+            <div class="endpoint-desc">Full update of a lead. Replaces all fields. Preserves notes and activity.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge patch">PATCH</span>
+              <span class="endpoint-path">/api/leads/:id</span>
+            </div>
+            <div class="endpoint-desc">Partial update. Only send the fields you want to change. Stage changes are tracked in activity.</div>
+            <div class="code-block">// Example: Move lead to "qualified" stage
+PATCH /api/leads/abc-123
+{ "stage": "qualified", "deal_value": 8000 }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge delete">DELETE</span>
+              <span class="endpoint-path">/api/leads/:id</span>
+            </div>
+            <div class="endpoint-desc">Permanently delete a lead.</div>
+          </div>
+        </div>
+
+        <!-- NOTES TAB -->
+        <div class="tab-content" id="tab-notes">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads/:id/notes</span>
+            </div>
+            <div class="endpoint-desc">Add a note to a lead. Use for call snapshots, follow-ups, or research notes.</div>
+            <div class="code-block">{
+  "content": "Had a great discovery call. They're interested in AI chatbot + appointment booking. Budget around $5K/month. Decision maker is the office manager, not the owner. Follow up next Tuesday.",
+  "type": "call_snapshot"
+}
+
+// Types: note, call_snapshot, follow_up, research</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge delete">DELETE</span>
+              <span class="endpoint-path">/api/leads/:id/notes/:noteId</span>
+            </div>
+            <div class="endpoint-desc">Delete a specific note from a lead.</div>
+          </div>
+        </div>
+
+        <!-- CALENDAR TAB -->
+        <div class="tab-content" id="tab-calendar">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads/:id/calendar</span>
+            </div>
+            <div class="endpoint-desc">Attach a calendar event to a lead. Use this from Make.com when a Google Calendar event is created.</div>
+            <div class="code-block">{
+  "event_id": "abc123xyz",
+  "title": "Discovery Call with Brightside Dental",
+  "start_time": "2026-03-01T14:00:00Z",
+  "end_time": "2026-03-01T14:30:00Z",
+  "meet_link": "https://meet.google.com/abc-defg-hij",
+  "description": "Discuss AI chatbot implementation",
+  "attendees": ["sarah@brightsidedental.com", "tulio@flowtier.io"]
+}</div>
+          </div>
+        </div>
+
+        <!-- BULK TAB -->
+        <div class="tab-content" id="tab-bulk">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads/bulk/stage</span>
+            </div>
+            <div class="endpoint-desc">Change the stage of multiple leads at once.</div>
+            <div class="code-block">{ "ids": ["id-1", "id-2", "id-3"], "stage": "qualified" }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads/bulk/delete</span>
+            </div>
+            <div class="endpoint-desc">Delete multiple leads at once.</div>
+            <div class="code-block">{ "ids": ["id-1", "id-2", "id-3"] }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads/bulk/tag</span>
+            </div>
+            <div class="endpoint-desc">Add or remove a tag from multiple leads.</div>
+            <div class="code-block">// Add tag
+{ "ids": ["id-1", "id-2"], "tag": "high-priority" }
+
+// Remove tag
+{ "ids": ["id-1", "id-2"], "tag": "high-priority", "action": "remove" }</div>
+          </div>
+        </div>
+
+        <!-- IMPORT/EXPORT TAB -->
+        <div class="tab-content" id="tab-import">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/export/csv</span>
+            </div>
+            <div class="endpoint-desc">Export all leads as CSV. Supports optional <code>industry</code> and <code>stage</code> query filters.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/import/csv</span>
+            </div>
+            <div class="endpoint-desc">Import leads from a CSV file. Upload as multipart form data with field name <code>file</code>.</div>
+            <div class="code-block">// Required CSV headers (flexible matching):
+Company Name, Contact Name, Emails, Phones, Website, LinkedIn,
+Address, Industry, Company Size, Revenue Estimate, Lead Source,
+Tags, Stage, Assigned To, Deal Value, Details
+
+// Emails and phones can be semicolon-separated for multiple values
+// Tags can be semicolon-separated</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/import/json</span>
+            </div>
+            <div class="endpoint-desc">Import one or more leads as JSON. Accepts a single object or an array of objects.</div>
+          </div>
+        </div>
+
+        <!-- CONFIG TAB -->
+        <div class="tab-content" id="tab-config">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/stages</span>
+            </div>
+            <div class="endpoint-desc">Get all pipeline stages with their IDs, labels, colors, and descriptions.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/industries</span>
+            </div>
+            <div class="endpoint-desc">Get the list of industry categories.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/industries</span>
+            </div>
+            <div class="endpoint-desc">Update the list of industries.</div>
+            <div class="code-block">{ "industries": ["Dental", "Healthcare", "Real Estate", "Custom Industry"] }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/stats</span>
+            </div>
+            <div class="endpoint-desc">Get pipeline statistics: total leads, deal values by stage, leads by industry.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/webhook-config</span>
+            </div>
+            <div class="endpoint-desc">Get the current webhook URL.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/webhook-config</span>
+            </div>
+            <div class="endpoint-desc">Set the webhook URL.</div>
+            <div class="code-block">{ "url": "https://hook.us2.make.com/your-webhook-id" }</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ -->
+      <!-- DATA MODEL                          -->
+      <!-- ═══════════════════════════════════ -->
+      <div class="dev-section" id="data-model">
+        <h2>&#128202; Lead Data <span>Model</span></h2>
+        <div class="endpoint-card">
+          <table class="field-table">
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>id</code></td><td>string (UUID)</td><td>Unique lead identifier</td></tr>
+              <tr><td><code>company_name</code></td><td>string</td><td>Company name</td></tr>
+              <tr><td><code>contact_name</code></td><td>string</td><td>Primary contact name</td></tr>
+              <tr><td><code>emails</code></td><td>string[]</td><td>Array of email addresses</td></tr>
+              <tr><td><code>phones</code></td><td>string[]</td><td>Array of phone numbers</td></tr>
+              <tr><td><code>website</code></td><td>string</td><td>Company website URL</td></tr>
+              <tr><td><code>linkedin</code></td><td>string</td><td>LinkedIn profile URL</td></tr>
+              <tr><td><code>address</code></td><td>string</td><td>Physical address</td></tr>
+              <tr><td><code>industry</code></td><td>string</td><td>Industry category</td></tr>
+              <tr><td><code>company_size</code></td><td>string</td><td>Employee count range</td></tr>
+              <tr><td><code>revenue_estimate</code></td><td>string</td><td>Estimated revenue</td></tr>
+              <tr><td><code>lead_source</code></td><td>string</td><td>How the lead was acquired</td></tr>
+              <tr><td><code>tags</code></td><td>string[]</td><td>Flexible labels/tags</td></tr>
+              <tr><td><code>stage</code></td><td>string</td><td>Pipeline stage ID</td></tr>
+              <tr><td><code>assigned_to</code></td><td>string</td><td>Team member assigned</td></tr>
+              <tr><td><code>deal_value</code></td><td>number</td><td>Estimated deal value in dollars</td></tr>
+              <tr><td><code>details</code></td><td>string</td><td>Enrichment data / notes</td></tr>
+              <tr><td><code>last_contacted</code></td><td>ISO date</td><td>Last contact timestamp</td></tr>
+              <tr><td><code>next_followup</code></td><td>ISO date</td><td>Next follow-up date</td></tr>
+              <tr><td><code>calendar_event</code></td><td>object</td><td>Google Calendar event details</td></tr>
+              <tr><td><code>proposal_url</code></td><td>string</td><td>Link to proposal on proposals.flowtier.io</td></tr>
+              <tr><td><code>notes</code></td><td>object[]</td><td>Array of notes with id, content, type, created_at</td></tr>
+              <tr><td><code>activity</code></td><td>object[]</td><td>Activity timeline entries</td></tr>
+              <tr><td><code>created_at</code></td><td>ISO date</td><td>Creation timestamp</td></tr>
+              <tr><td><code>updated_at</code></td><td>ISO date</td><td>Last update timestamp</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ -->
+      <!-- MAKE.COM INTEGRATION GUIDE          -->
+      <!-- ═══════════════════════════════════ -->
+      <div class="dev-section" id="make-integration">
+        <h2>&#9881; Make.com <span>Integration Guide</span></h2>
+
+        <div class="endpoint-card">
+          <h3 style="font-size:0.875rem;font-weight:700;margin-bottom:12px;">1. Sending Leads from Make.com</h3>
+          <div class="endpoint-desc">Use an HTTP module in Make.com to POST leads to the API:</div>
+          <div class="code-block">URL: https://leads.flowtier.io/api/leads
+Method: POST
+Headers:
+  Content-Type: application/json
+  X-Source: make.com
+
+Body:
+{
+  "company_name": "{{company_name}}",
+  "contact_name": "{{contact_name}}",
+  "emails": ["{{email}}"],
+  "phones": ["{{phone}}"],
+  "industry": "{{industry}}",
+  "lead_source": "make.com",
+  "details": "{{enrichment_data}}",
+  "tags": ["{{tag1}}", "{{tag2}}"]
+}</div>
+        </div>
+
+        <div class="endpoint-card">
+          <h3 style="font-size:0.875rem;font-weight:700;margin-bottom:12px;">2. Receiving Webhooks in Make.com</h3>
+          <div class="endpoint-desc">Create a Custom Webhook trigger in Make.com and paste the URL in the Webhook Config above. Events sent:</div>
+          <div class="code-block">Events:
+  lead_created        — New lead added
+  lead_stage_changed  — Lead moved to a different stage
+  lead_call_booked    — Calendar event attached to lead
+
+Headers included:
+  X-Source: flowtier-lead-system
+  X-Event-Type: lead_created | lead_stage_changed | lead_call_booked</div>
+        </div>
+
+        <div class="endpoint-card">
+          <h3 style="font-size:0.875rem;font-weight:700;margin-bottom:12px;">3. Updating Lead Stage from Make.com</h3>
+          <div class="endpoint-desc">When a lead responds to an email or books a call, update their stage via PATCH:</div>
+          <div class="code-block">URL: https://leads.flowtier.io/api/leads/{{lead_id}}
+Method: PATCH
+Headers:
+  Content-Type: application/json
+
+Body:
+{ "stage": "qualified" }</div>
+        </div>
+
+        <div class="endpoint-card">
+          <h3 style="font-size:0.875rem;font-weight:700;margin-bottom:12px;">4. Attaching Google Calendar Events</h3>
+          <div class="endpoint-desc">When a call is booked via Calendly or Google Calendar, send the event details:</div>
+          <div class="code-block">URL: https://leads.flowtier.io/api/leads/{{lead_id}}/calendar
+Method: POST
+Headers:
+  Content-Type: application/json
+
+Body:
+{
+  "event_id": "{{google_event_id}}",
+  "title": "{{event_title}}",
+  "start_time": "{{start_time}}",
+  "end_time": "{{end_time}}",
+  "meet_link": "{{hangout_link}}",
+  "description": "{{event_description}}",
+  "attendees": ["{{attendee_email}}"]
+}</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ════════════════════════════════════════
+    // TEST PAYLOADS
+    // ════════════════════════════════════════
+    const testPayloads = {
+      lead_created: {
+        event: 'lead_created',
+        timestamp: new Date().toISOString(),
+        lead_id: 'test-uuid-' + Date.now(),
+        company_name: 'Brightside Dental',
+        contact_name: 'Sarah Mitchell',
+        emails: ['sarah@brightsidedental.com'],
+        phones: ['+1 555-123-4567'],
+        industry: 'Dental',
+        stage: 'cold',
+        lead_source: 'make.com'
+      },
+      lead_stage_changed: {
+        event: 'lead_stage_changed',
+        timestamp: new Date().toISOString(),
+        lead_id: 'test-uuid-' + Date.now(),
+        company_name: 'Brightside Dental',
+        contact_name: 'Sarah Mitchell',
+        emails: ['sarah@brightsidedental.com'],
+        phones: ['+1 555-123-4567'],
+        industry: 'Dental',
+        old_stage: 'cold',
+        new_stage: 'qualified',
+        deal_value: 5000
+      },
+      lead_call_booked: {
+        event: 'lead_call_booked',
+        timestamp: new Date().toISOString(),
+        lead_id: 'test-uuid-' + Date.now(),
+        company_name: 'Brightside Dental',
+        contact_name: 'Sarah Mitchell',
+        emails: ['sarah@brightsidedental.com'],
+        calendar_event: {
+          event_id: 'gcal_abc123xyz',
+          title: 'Discovery Call with Brightside Dental',
+          start_time: '2026-03-01T14:00:00Z',
+          end_time: '2026-03-01T14:30:00Z',
+          meet_link: 'https://meet.google.com/abc-defg-hij',
+          description: 'Discuss AI chatbot + appointment booking automation',
+          attendees: ['sarah@brightsidedental.com', 'tulio@flowtier.io']
+        }
+      },
+      lead_note_added: {
+        event: 'lead_note_added',
+        timestamp: new Date().toISOString(),
+        lead_id: 'test-uuid-' + Date.now(),
+        company_name: 'Brightside Dental',
+        contact_name: 'Sarah Mitchell',
+        note: {
+          id: 'note-test-' + Date.now(),
+          content: 'Great discovery call. They want AI chatbot for appointment booking. Budget is $5K/month. Decision maker is the office manager. Follow up next Tuesday with a proposal.',
+          type: 'call_snapshot',
+          created_at: new Date().toISOString()
+        }
+      }
+    };
+
+    // ════════════════════════════════════════
+    // INIT
+    // ════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Load webhook URL
+      const res = await fetch('/api/webhook-config');
+      const data = await res.json();
+      document.getElementById('webhookUrl').value = data.url || '';
+      updateWebhookStatus(data.url);
+
+      // Render payloads
+      Object.keys(testPayloads).forEach(key => {
+        const el = document.getElementById('payload_' + key);
+        if (el) el.textContent = JSON.stringify(testPayloads[key], null, 2);
+      });
+
+      // Save webhook
+      document.getElementById('saveWebhookBtn').addEventListener('click', async () => {
+        const url = document.getElementById('webhookUrl').value.trim();
+        const res = await fetch('/api/webhook-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        if (res.ok) {
+          showToast('Webhook URL saved', 'success');
+          updateWebhookStatus(url);
+        }
+      });
+
+      // Smooth scroll for sidebar links
+      document.querySelectorAll('.sidebar-nav a[href^="#"]').forEach(a => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          const target = document.querySelector(a.getAttribute('href'));
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          document.querySelectorAll('.sidebar-nav .nav-item').forEach(n => n.classList.remove('active'));
+          a.classList.add('active');
+        });
+      });
+    });
+
+    function updateWebhookStatus(url) {
+      const el = document.getElementById('webhookStatus');
+      if (url) {
+        el.innerHTML = '<span style="color:var(--color-success);">&#10003;</span> Webhook configured';
+      } else {
+        el.innerHTML = '<span style="color:var(--color-warning);">&#9888;</span> No webhook URL set. Test buttons will not work.';
+      }
+    }
+
+    // ════════════════════════════════════════
+    // WEBHOOK TESTING
+    // ════════════════════════════════════════
+    async function testWebhook(eventType) {
+      const resultEl = document.getElementById('result_' + eventType);
+      resultEl.style.display = 'block';
+      resultEl.className = 'test-result';
+      resultEl.textContent = 'Sending...';
+
+      // Update timestamps
+      testPayloads[eventType].timestamp = new Date().toISOString();
+
+      try {
+        const res = await fetch('/api/dev/test-webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_type: eventType,
+            payload: testPayloads[eventType]
+          })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          resultEl.className = 'test-result success';
+          resultEl.textContent = `✓ Sent successfully. Webhook responded with status ${data.webhook_status}.\n\nResponse: ${data.webhook_response || '(empty)'}`;
+        } else {
+          resultEl.className = 'test-result error';
+          resultEl.textContent = `✗ Failed: ${data.error}`;
+        }
+      } catch (err) {
+        resultEl.className = 'test-result error';
+        resultEl.textContent = `✗ Error: ${err.message}`;
+      }
+    }
+
+    function togglePayload(eventType) {
+      const el = document.getElementById('payload_' + eventType);
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // ════════════════════════════════════════
+    // TABS
+    // ════════════════════════════════════════
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('tab-' + tabId).classList.add('active');
+    }
+
+    // ════════════════════════════════════════
+    // TOAST
+    // ════════════════════════════════════════
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type;
+      setTimeout(() => t.classList.add('visible'), 10);
+      setTimeout(() => t.classList.remove('visible'), 3000);
+    }
+  </script>
+</body>
+</html>
