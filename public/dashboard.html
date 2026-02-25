@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -28,6 +29,7 @@
         <div id="industryNav"></div>
       </nav>
       <div class="sidebar-footer">
+        <a href="/import" style="margin-bottom:8px;"><span class="icon">&#8679;</span> CSV Import</a>
         <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
         <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
       </div>
@@ -38,25 +40,77 @@
 
       <!-- Header -->
       <div class="page-header">
-        <h1 id="pageTitle">All <span>Leads</span></h1>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">&#9776;</button>
+          <h1 id="pageTitle">All <span>Leads</span></h1>
+        </div>
         <div class="header-actions">
+          <div class="view-toggle">
+            <button id="viewTable" class="active" onclick="setView('table')">&#9776; Table</button>
+            <button id="viewKanban" onclick="setView('kanban')">&#9638; Kanban</button>
+          </div>
           <a href="/api/export/csv" class="btn btn-secondary btn-sm" id="exportBtn">&#8681; Export CSV</a>
-          <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
-            &#8679; Import CSV
-            <input type="file" accept=".csv" id="importCsvInput" style="display:none;">
-          </label>
+          <a href="/import" class="btn btn-secondary btn-sm">&#8679; Import CSV</a>
           <a href="/new" class="btn btn-primary">&#43; New Lead</a>
+        </div>
+      </div>
+
+      <!-- Overdue Alert -->
+      <div class="overdue-alert" id="overdueAlert" style="display:none;">
+        <span class="icon">&#9888;</span>
+        <div><strong id="overdueCount">0</strong> leads have overdue follow-ups. <a href="#" onclick="filterOverdue(event)">View them</a></div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotal" style="color:var(--color-text);">0</div>
+          <div class="stat-label">Total Leads</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statPipeline" style="color:var(--color-primary);">$0</div>
+          <div class="stat-label">Pipeline Value</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statConversion" style="color:var(--color-info);">0%</div>
+          <div class="stat-label">Conversion Rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statWeek" style="color:var(--color-warning);">0</div>
+          <div class="stat-label">This Week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statAvgDeal" style="color:#CE93D8;">$0</div>
+          <div class="stat-label">Avg Deal Value</div>
         </div>
       </div>
 
       <!-- Pipeline Bar -->
       <div class="pipeline-bar" id="pipelineBar"></div>
 
+      <!-- Charts -->
+      <div class="charts-row" id="chartsRow">
+        <div class="chart-card">
+          <h3>Pipeline Value by Stage</h3>
+          <canvas id="pipelineChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Lead Source Performance</h3>
+          <canvas id="sourceChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Activity Feed -->
+      <div class="activity-feed" id="activityFeed">
+        <h3>Recent Activity</h3>
+        <div id="feedList"></div>
+      </div>
+
       <!-- Toolbar -->
       <div class="toolbar">
         <div class="search-box">
           <span class="search-icon">&#128269;</span>
-          <input type="text" id="searchInput" placeholder="Search leads by name, company, email, tag...">
+          <input type="text" id="searchInput" placeholder="Search leads... (press / to focus)">
         </div>
         <select class="filter-select" id="industryFilter">
           <option value="">All Industries</option>
@@ -77,25 +131,32 @@
         <button class="btn btn-sm btn-secondary" id="bulkClearBtn">Clear</button>
       </div>
 
-      <!-- Table -->
-      <div style="overflow-x:auto;">
-        <table class="lead-table" id="leadTable">
-          <thead>
-            <tr>
-              <th class="checkbox-cell"><input type="checkbox" id="selectAll"></th>
-              <th>Company</th>
-              <th>Contact</th>
-              <th>Email</th>
-              <th>Industry</th>
-              <th>Stage</th>
-              <th>Tags</th>
-              <th>Deal Value</th>
-              <th>Updated</th>
-              <th class="actions-cell"></th>
-            </tr>
-          </thead>
-          <tbody id="leadTableBody"></tbody>
-        </table>
+      <!-- Table View -->
+      <div id="tableView">
+        <div style="overflow-x:auto;">
+          <table class="lead-table" id="leadTable">
+            <thead>
+              <tr>
+                <th class="checkbox-cell"><input type="checkbox" id="selectAll"></th>
+                <th>Company</th>
+                <th>Contact</th>
+                <th>Email</th>
+                <th>Industry</th>
+                <th>Stage</th>
+                <th>Score</th>
+                <th>Deal Value</th>
+                <th>Updated</th>
+                <th class="actions-cell"></th>
+              </tr>
+            </thead>
+            <tbody id="leadTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Kanban View -->
+      <div id="kanbanView" style="display:none;">
+        <div class="kanban-board" id="kanbanBoard"></div>
       </div>
 
       <div class="empty-state" id="emptyState" style="display:none;">
@@ -108,6 +169,14 @@
     </main>
   </div>
 
+  <!-- Keyboard shortcuts -->
+  <div class="shortcuts-help">
+    <span><span class="shortcut-key">N</span> New Lead</span>
+    <span><span class="shortcut-key">/</span> Search</span>
+    <span><span class="shortcut-key">K</span> Kanban</span>
+    <span><span class="shortcut-key">Esc</span> Clear</span>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
@@ -117,11 +186,15 @@
     let allLeads = [];
     let stages = [];
     let industries = [];
+    let sources = [];
     let selectedIds = new Set();
     let currentStageFilter = '';
     let currentIndustryFilter = '';
+    let currentView = 'table';
+    let pipelineChart = null;
+    let sourceChart = null;
+    let showOverdueOnly = false;
 
-    // Check if we're on an industry page
     const pathParts = window.location.pathname.split('/');
     if (pathParts[1] === 'industry' && pathParts[2]) {
       currentIndustryFilter = decodeURIComponent(pathParts[2]);
@@ -133,16 +206,20 @@
     document.addEventListener('DOMContentLoaded', async () => {
       await loadConfig();
       await loadLeads();
+      await loadStats();
       setupEvents();
+      setupKeyboardShortcuts();
     });
 
     async function loadConfig() {
-      const [stagesRes, industriesRes] = await Promise.all([
+      const [stagesRes, industriesRes, sourcesRes] = await Promise.all([
         fetch('/api/stages').then(r => r.json()),
-        fetch('/api/industries').then(r => r.json())
+        fetch('/api/industries').then(r => r.json()),
+        fetch('/api/sources').then(r => r.json())
       ]);
       stages = stagesRes.stages;
       industries = industriesRes.industries;
+      sources = sourcesRes.sources;
       renderSidebar();
       renderPipeline();
       renderFilters();
@@ -159,18 +236,66 @@
       const industryVal = document.getElementById('industryFilter').value;
       if (industryVal && !currentIndustryFilter) params.set('industry', industryVal);
 
+      const sourceVal = document.getElementById('sourceFilter').value;
+      if (sourceVal) params.set('source', sourceVal);
+
       const res = await fetch('/api/leads?' + params.toString());
       const data = await res.json();
       allLeads = data.leads || [];
-      renderTable();
-      updateCounts();
+
+      if (showOverdueOnly) {
+        const now = new Date();
+        allLeads = allLeads.filter(l => l.next_followup && new Date(l.next_followup) < now && l.stage !== 'won' && l.stage !== 'lost');
+      }
+
+      renderCurrentView();
+    }
+
+    async function loadStats() {
+      const data = await fetch('/api/stats').then(r => r.json());
+
+      document.getElementById('statTotal').textContent = data.total_leads;
+      document.getElementById('statPipeline').textContent = '$' + Number(data.total_deal_value).toLocaleString();
+      document.getElementById('statConversion').textContent = data.conversion_rate + '%';
+      document.getElementById('statWeek').textContent = data.leads_this_week;
+      document.getElementById('statAvgDeal').textContent = '$' + Number(data.avg_deal_value).toLocaleString();
+
+      document.getElementById('countAll').textContent = data.total_leads;
+
+      // Overdue alert
+      if (data.overdue_followups > 0) {
+        document.getElementById('overdueAlert').style.display = 'flex';
+        document.getElementById('overdueCount').textContent = data.overdue_followups;
+      }
+
+      // Update pipeline counts
+      stages.forEach(s => {
+        const stageData = data.by_stage[s.id] || { count: 0, deal_value: 0 };
+        const el = document.getElementById('countStage_' + s.id);
+        const pel = document.getElementById('pipeCount_' + s.id);
+        const pval = document.getElementById('pipeVal_' + s.id);
+        if (el) el.textContent = stageData.count;
+        if (pel) pel.textContent = stageData.count;
+        if (pval) pval.textContent = '$' + Number(stageData.deal_value).toLocaleString();
+      });
+
+      // Industry counts
+      Object.keys(data.by_industry || {}).forEach(ind => {
+        const el = document.getElementById('countInd_' + ind.replace(/\s/g, '_'));
+        if (el) el.textContent = data.by_industry[ind];
+      });
+
+      // Charts
+      renderCharts(data);
+
+      // Activity feed
+      renderActivityFeed(data.recent_activity || []);
     }
 
     // ════════════════════════════════════════
     // RENDER SIDEBAR
     // ════════════════════════════════════════
     function renderSidebar() {
-      // Stage nav
       const stageNav = document.getElementById('stageNav');
       stageNav.innerHTML = stages.map(s => `
         <a href="#" class="nav-item ${currentStageFilter === s.id ? 'active' : ''}" data-stage="${s.id}" onclick="filterByStage('${s.id}', event)">
@@ -179,7 +304,6 @@
         </a>
       `).join('');
 
-      // Industry nav
       const industryNav = document.getElementById('industryNav');
       industryNav.innerHTML = industries.map(ind => `
         <a href="/industry/${encodeURIComponent(ind)}" class="nav-item ${currentIndustryFilter === ind ? 'active' : ''}">
@@ -199,6 +323,7 @@
           <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${s.color};"></div>
           <div class="pipeline-count" id="pipeCount_${s.id}" style="color:${s.color};">0</div>
           <div class="pipeline-label">${s.label}</div>
+          <div class="pipeline-value" id="pipeVal_${s.id}">$0</div>
         </div>
       `).join('');
     }
@@ -208,10 +333,110 @@
       indFilter.innerHTML = '<option value="">All Industries</option>' +
         industries.map(i => `<option value="${i}" ${currentIndustryFilter === i ? 'selected' : ''}>${i}</option>`).join('');
 
-      // Bulk stage select
+      const srcFilter = document.getElementById('sourceFilter');
+      srcFilter.innerHTML = '<option value="">All Sources</option>' +
+        sources.map(s => `<option value="${s}">${s}</option>`).join('');
+
       const bulkStage = document.getElementById('bulkStageSelect');
       bulkStage.innerHTML = '<option value="">Change Stage...</option>' +
         stages.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    }
+
+    // ════════════════════════════════════════
+    // CHARTS
+    // ════════════════════════════════════════
+    function renderCharts(data) {
+      // Pipeline value chart
+      const pipeCtx = document.getElementById('pipelineChart').getContext('2d');
+      if (pipelineChart) pipelineChart.destroy();
+      pipelineChart = new Chart(pipeCtx, {
+        type: 'bar',
+        data: {
+          labels: stages.map(s => s.label),
+          datasets: [{
+            label: 'Deal Value ($)',
+            data: stages.map(s => (data.by_stage[s.id] || {}).deal_value || 0),
+            backgroundColor: stages.map(s => s.color + '40'),
+            borderColor: stages.map(s => s.color),
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { ticks: { color: '#666', callback: v => '$' + v.toLocaleString() }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            x: { ticks: { color: '#666' }, grid: { display: false } }
+          }
+        }
+      });
+
+      // Source performance chart
+      const srcCtx = document.getElementById('sourceChart').getContext('2d');
+      if (sourceChart) sourceChart.destroy();
+      const srcLabels = Object.keys(data.by_source || {});
+      const srcData = srcLabels.map(s => data.by_source[s].count);
+      const srcColors = ['#00E676', '#64B5F6', '#FFB74D', '#CE93D8', '#4DD0E1', '#FF5252', '#90A4AE'];
+      sourceChart = new Chart(srcCtx, {
+        type: 'doughnut',
+        data: {
+          labels: srcLabels,
+          datasets: [{
+            data: srcData,
+            backgroundColor: srcLabels.map((_, i) => srcColors[i % srcColors.length] + '60'),
+            borderColor: srcLabels.map((_, i) => srcColors[i % srcColors.length]),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#999', font: { size: 11 } } }
+          }
+        }
+      });
+    }
+
+    // ════════════════════════════════════════
+    // ACTIVITY FEED
+    // ════════════════════════════════════════
+    function renderActivityFeed(activities) {
+      const list = document.getElementById('feedList');
+      if (!activities.length) {
+        list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">No recent activity.</div>';
+        return;
+      }
+      list.innerHTML = activities.map(a => `
+        <div class="feed-item">
+          <div class="feed-dot ${a.type || ''}"></div>
+          <div class="feed-msg">
+            <a href="/lead/${a.lead_id}">${esc(a.company_name || a.contact_name || 'Lead')}</a>
+            — ${esc(a.message)}
+          </div>
+          <div class="feed-time">${timeAgo(a.timestamp)}</div>
+        </div>
+      `).join('');
+    }
+
+    // ════════════════════════════════════════
+    // VIEW TOGGLE
+    // ════════════════════════════════════════
+    function setView(view) {
+      currentView = view;
+      document.getElementById('viewTable').classList.toggle('active', view === 'table');
+      document.getElementById('viewKanban').classList.toggle('active', view === 'kanban');
+      document.getElementById('tableView').style.display = view === 'table' ? 'block' : 'none';
+      document.getElementById('kanbanView').style.display = view === 'kanban' ? 'block' : 'none';
+      renderCurrentView();
+    }
+
+    function renderCurrentView() {
+      if (currentView === 'table') renderTable();
+      else renderKanban();
+
+      const empty = document.getElementById('emptyState');
+      empty.style.display = allLeads.length === 0 ? 'block' : 'none';
     }
 
     // ════════════════════════════════════════
@@ -219,21 +444,15 @@
     // ════════════════════════════════════════
     function renderTable() {
       const tbody = document.getElementById('leadTableBody');
-      const empty = document.getElementById('emptyState');
-
-      if (allLeads.length === 0) {
-        tbody.innerHTML = '';
-        empty.style.display = 'block';
-        return;
-      }
-      empty.style.display = 'none';
+      if (allLeads.length === 0) { tbody.innerHTML = ''; return; }
 
       tbody.innerHTML = allLeads.map(l => {
         const stage = stages.find(s => s.id === l.stage) || { label: l.stage, color: '#78909C' };
         const emails = (l.emails || []).join(', ');
-        const tags = (l.tags || []).map(t => `<span class="tag-chip">${esc(t)}</span>`).join('');
         const dealVal = l.deal_value ? '$' + Number(l.deal_value).toLocaleString() : '—';
         const updated = l.updated_at ? timeAgo(l.updated_at) : '—';
+        const score = l.lead_score || 0;
+        const scoreClass = score >= 60 ? 'high' : score >= 30 ? 'medium' : 'low';
 
         return `<tr class="${selectedIds.has(l.id) ? 'selected' : ''}" data-id="${l.id}">
           <td class="checkbox-cell"><input type="checkbox" ${selectedIds.has(l.id) ? 'checked' : ''} onchange="toggleSelect('${l.id}')"></td>
@@ -242,34 +461,55 @@
           <td class="email-cell">${esc(emails || '—')}</td>
           <td>${esc(l.industry || '—')}</td>
           <td><span class="stage-badge" style="background:${stage.color}20;color:${stage.color};">${stage.label}</span></td>
-          <td>${tags || '—'}</td>
+          <td><span class="score-badge ${scoreClass}">${score}</span></td>
           <td>${dealVal}</td>
           <td style="font-size:0.75rem;color:var(--color-text-muted);">${updated}</td>
           <td class="actions-cell">
+            <a href="/lead/${l.id}" class="btn-icon" title="View" style="display:inline-flex;">&#128065;</a>
             <a href="/edit/${l.id}" class="btn-icon" title="Edit" style="display:inline-flex;">&#9998;</a>
-            <button class="btn-icon" title="Delete" onclick="deleteLead('${l.id}')" style="display:inline-flex;">&#128465;</button>
           </td>
         </tr>`;
       }).join('');
     }
 
-    function updateCounts() {
-      // Fetch fresh stats
-      fetch('/api/stats').then(r => r.json()).then(data => {
-        document.getElementById('countAll').textContent = data.total_leads;
-        stages.forEach(s => {
-          const el = document.getElementById('countStage_' + s.id);
-          const pel = document.getElementById('pipeCount_' + s.id);
-          const count = data.by_stage[s.id] ? data.by_stage[s.id].count : 0;
-          if (el) el.textContent = count;
-          if (pel) pel.textContent = count;
-        });
-        // Industry counts
-        Object.keys(data.by_industry || {}).forEach(ind => {
-          const el = document.getElementById('countInd_' + ind.replace(/\s/g, '_'));
-          if (el) el.textContent = data.by_industry[ind];
-        });
-      });
+    // ════════════════════════════════════════
+    // RENDER KANBAN
+    // ════════════════════════════════════════
+    function renderKanban() {
+      const board = document.getElementById('kanbanBoard');
+      const now = new Date();
+
+      board.innerHTML = stages.map(s => {
+        const stageLeads = allLeads.filter(l => l.stage === s.id);
+        return `
+          <div class="kanban-column">
+            <div class="kanban-column-header">
+              <span class="kanban-column-title" style="color:${s.color};">${s.label}</span>
+              <span class="kanban-column-count">${stageLeads.length}</span>
+            </div>
+            <div class="kanban-column-body">
+              ${stageLeads.length === 0 ? '<div style="color:var(--color-text-muted);font-size:0.75rem;text-align:center;padding:20px;">No leads</div>' :
+                stageLeads.map(l => {
+                  const score = l.lead_score || 0;
+                  const scoreClass = score >= 60 ? 'high' : score >= 30 ? 'medium' : 'low';
+                  const isOverdue = l.next_followup && new Date(l.next_followup) < now && l.stage !== 'won' && l.stage !== 'lost';
+                  return `
+                    <div class="kanban-card" onclick="window.location='/lead/${l.id}'">
+                      <div class="kanban-card-company">${esc(l.company_name || '—')}</div>
+                      <div class="kanban-card-contact">${esc(l.contact_name || '')}</div>
+                      <div class="kanban-card-footer">
+                        <span class="kanban-card-value">${l.deal_value ? '$' + Number(l.deal_value).toLocaleString() : ''}</span>
+                        <span class="kanban-card-score score-badge ${scoreClass}">${score}</span>
+                      </div>
+                      ${isOverdue ? '<div class="overdue-badge">OVERDUE</div>' : ''}
+                    </div>
+                  `;
+                }).join('')
+              }
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     // ════════════════════════════════════════
@@ -277,28 +517,43 @@
     // ════════════════════════════════════════
     function filterByStage(stageId, e) {
       if (e) e.preventDefault();
-      if (currentStageFilter === stageId) {
-        currentStageFilter = '';
-      } else {
-        currentStageFilter = stageId;
-      }
-      // Update active states
+      showOverdueOnly = false;
+      currentStageFilter = currentStageFilter === stageId ? '' : stageId;
+
       document.querySelectorAll('[data-stage]').forEach(el => {
         el.classList.toggle('active', el.dataset.stage === currentStageFilter);
       });
       document.querySelectorAll('.pipeline-card').forEach(el => el.classList.remove('active'));
       if (currentStageFilter) {
-        const activeCard = document.querySelector(`.pipeline-card[onclick*="${currentStageFilter}"]`);
-        if (activeCard) activeCard.classList.add('active');
+        const idx = stages.findIndex(s => s.id === currentStageFilter);
+        const cards = document.querySelectorAll('.pipeline-card');
+        if (cards[idx]) cards[idx].classList.add('active');
       }
-      // Update title
-      if (currentStageFilter) {
-        const s = stages.find(s => s.id === currentStageFilter);
-        document.getElementById('pageTitle').innerHTML = `${s ? s.label : ''} <span>Leads</span>`;
-      } else {
-        document.getElementById('pageTitle').innerHTML = currentIndustryFilter ? `${currentIndustryFilter} <span>Leads</span>` : 'All <span>Leads</span>';
-      }
+
+      updateTitle();
       loadLeads();
+    }
+
+    function filterOverdue(e) {
+      if (e) e.preventDefault();
+      showOverdueOnly = true;
+      currentStageFilter = '';
+      updateTitle();
+      loadLeads();
+    }
+
+    function updateTitle() {
+      const title = document.getElementById('pageTitle');
+      if (showOverdueOnly) {
+        title.innerHTML = 'Overdue <span>Follow-ups</span>';
+      } else if (currentStageFilter) {
+        const s = stages.find(s => s.id === currentStageFilter);
+        title.innerHTML = `${s ? s.label : ''} <span>Leads</span>`;
+      } else if (currentIndustryFilter) {
+        title.innerHTML = `${currentIndustryFilter} <span>Leads</span>`;
+      } else {
+        title.innerHTML = 'All <span>Leads</span>';
+      }
     }
 
     // ════════════════════════════════════════
@@ -316,12 +571,11 @@
         loadLeads();
       });
 
+      document.getElementById('sourceFilter').addEventListener('change', loadLeads);
+
       document.getElementById('selectAll').addEventListener('change', (e) => {
-        if (e.target.checked) {
-          allLeads.forEach(l => selectedIds.add(l.id));
-        } else {
-          selectedIds.clear();
-        }
+        if (e.target.checked) allLeads.forEach(l => selectedIds.add(l.id));
+        else selectedIds.clear();
         renderTable();
         updateBulkBar();
       });
@@ -335,42 +589,55 @@
         updateBulkBar();
       });
 
-      // CSV import
-      document.getElementById('importCsvInput').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const formData = new FormData();
-        formData.append('file', file);
-        try {
-          const res = await fetch('/api/import/csv', { method: 'POST', body: formData });
-          const data = await res.json();
-          if (data.success) {
-            showToast(`Imported ${data.imported} leads`, 'success');
-            loadLeads();
-          } else {
-            showToast(data.error || 'Import failed', 'error');
-          }
-        } catch (err) {
-          showToast('Import failed: ' + err.message, 'error');
-        }
-        e.target.value = '';
-      });
-
       // Update export link with filters
-      const exportBtn = document.getElementById('exportBtn');
-      const origHref = exportBtn.href;
       setInterval(() => {
         const params = new URLSearchParams();
         if (currentIndustryFilter) params.set('industry', currentIndustryFilter);
         if (currentStageFilter) params.set('stage', currentStageFilter);
-        exportBtn.href = '/api/export/csv' + (params.toString() ? '?' + params.toString() : '');
+        document.getElementById('exportBtn').href = '/api/export/csv' + (params.toString() ? '?' + params.toString() : '');
       }, 500);
 
-      // Update page title for industry view
       if (currentIndustryFilter) {
         document.getElementById('pageTitle').innerHTML = `${currentIndustryFilter} <span>Leads</span>`;
         document.title = `${currentIndustryFilter} — FlowTier Leads`;
       }
+    }
+
+    // ════════════════════════════════════════
+    // KEYBOARD SHORTCUTS
+    // ════════════════════════════════════════
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        // Don't trigger when typing in inputs
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+          if (e.key === 'Escape') e.target.blur();
+          return;
+        }
+
+        switch (e.key) {
+          case 'n':
+          case 'N':
+            e.preventDefault();
+            window.location.href = '/new';
+            break;
+          case '/':
+            e.preventDefault();
+            document.getElementById('searchInput').focus();
+            break;
+          case 'k':
+          case 'K':
+            e.preventDefault();
+            setView(currentView === 'kanban' ? 'table' : 'kanban');
+            break;
+          case 'Escape':
+            showOverdueOnly = false;
+            currentStageFilter = '';
+            document.getElementById('searchInput').value = '';
+            updateTitle();
+            loadLeads();
+            break;
+        }
+      });
     }
 
     // ════════════════════════════════════════
@@ -409,6 +676,7 @@
         document.getElementById('selectAll').checked = false;
         updateBulkBar();
         loadLeads();
+        loadStats();
       }
     }
 
@@ -426,17 +694,8 @@
         document.getElementById('selectAll').checked = false;
         updateBulkBar();
         loadLeads();
+        loadStats();
       }
-    }
-
-    // ════════════════════════════════════════
-    // DELETE
-    // ════════════════════════════════════════
-    async function deleteLead(id) {
-      if (!confirm('Delete this lead?')) return;
-      await fetch('/api/leads/' + id, { method: 'DELETE' });
-      showToast('Lead deleted', 'success');
-      loadLeads();
     }
 
     // ════════════════════════════════════════

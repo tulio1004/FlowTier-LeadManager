@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Import — FlowTier Leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <img src="/static/images/logo.webp" alt="FlowTier">
+        <div class="app-label">Lead Management</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item"><span class="icon">&#8592;</span> Back to Dashboard</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
+        <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">&#9776;</button>
+          <h1>CSV <span>Import</span></h1>
+        </div>
+        <div class="header-actions">
+          <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+      </div>
+
+      <div class="import-container">
+
+        <!-- Step 1: Upload -->
+        <div class="form-section" id="step1">
+          <h3>Step 1 — Upload CSV File</h3>
+          <p style="color:var(--color-text-secondary);font-size:0.8125rem;margin-bottom:16px;">
+            Upload a CSV file with your leads. In the next step, you'll map each column to a lead field.
+            Columns you don't need can be skipped.
+          </p>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <label class="btn btn-primary" style="cursor:pointer;">
+              &#128194; Choose CSV File
+              <input type="file" id="csvFileInput" accept=".csv,.txt" style="display:none;">
+            </label>
+            <span id="fileName" style="color:var(--color-text-muted);font-size:0.8125rem;">No file selected</span>
+          </div>
+        </div>
+
+        <!-- Step 2: Column Mapping -->
+        <div class="form-section" id="step2" style="display:none;">
+          <h3>Step 2 — Map Columns to Lead Fields</h3>
+          <p style="color:var(--color-text-secondary);font-size:0.8125rem;margin-bottom:16px;">
+            For each column in your CSV, select which lead field it maps to. Set to "Skip" for columns you don't need.
+          </p>
+
+          <div style="overflow-x:auto;">
+            <table class="mapping-table" id="mappingTable">
+              <thead>
+                <tr>
+                  <th>CSV Column</th>
+                  <th>Sample Data</th>
+                  <th>Map To Field</th>
+                </tr>
+              </thead>
+              <tbody id="mappingBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Industry Settings -->
+          <div style="margin-top:20px;padding:16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);">
+            <h4 style="font-size:0.8125rem;font-weight:700;margin-bottom:12px;">Industry Settings</h4>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-group" style="margin-bottom:0;min-width:200px;">
+                <label>Industry Handling</label>
+                <select id="industryMode">
+                  <option value="from_csv">Use value from CSV column</option>
+                  <option value="select_existing">Set all to existing industry</option>
+                  <option value="custom">Set all to custom industry</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;min-width:200px;display:none;" id="industrySelectGroup">
+                <label>Select Industry</label>
+                <select id="industrySelect"></select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;min-width:200px;display:none;" id="industryCustomGroup">
+                <label>Custom Industry Name</label>
+                <input type="text" id="industryCustomInput" placeholder="e.g., Construction">
+              </div>
+            </div>
+          </div>
+
+          <!-- Default Stage -->
+          <div style="margin-top:12px;padding:16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-group" style="margin-bottom:0;min-width:200px;">
+                <label>Default Stage for Imported Leads</label>
+                <select id="defaultStage"></select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;min-width:200px;">
+                <label>Default Source</label>
+                <select id="defaultSource"></select>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;display:flex;gap:12px;">
+            <button class="btn btn-secondary" onclick="goToStep(1)">&#8592; Back</button>
+            <button class="btn btn-primary" onclick="goToStep(3)">Preview Import &#8594;</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Preview -->
+        <div class="form-section" id="step3" style="display:none;">
+          <h3>Step 3 — Preview &amp; Import</h3>
+          <p style="color:var(--color-text-secondary);font-size:0.8125rem;margin-bottom:16px;">
+            Review the first 5 rows below. If everything looks correct, click "Import All" to create the leads.
+          </p>
+
+          <div style="overflow-x:auto;margin-bottom:16px;">
+            <table class="preview-table" id="previewTable">
+              <thead><tr id="previewHead"></tr></thead>
+              <tbody id="previewBody"></tbody>
+            </table>
+          </div>
+
+          <div style="padding:12px 16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);margin-bottom:16px;">
+            <span style="font-size:0.8125rem;color:var(--color-text-secondary);">
+              Total rows to import: <strong id="totalRows" style="color:var(--color-primary);">0</strong>
+            </span>
+          </div>
+
+          <div style="display:flex;gap:12px;">
+            <button class="btn btn-secondary" onclick="goToStep(2)">&#8592; Back</button>
+            <button class="btn btn-primary" id="importBtn" onclick="executeImport()">&#10003; Import All Leads</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Results -->
+        <div class="form-section" id="step4" style="display:none;">
+          <h3>Import Results</h3>
+          <div id="importResults"></div>
+          <div style="margin-top:20px;">
+            <a href="/" class="btn btn-primary">&#8592; Go to Dashboard</a>
+            <button class="btn btn-secondary" onclick="resetImport()" style="margin-left:8px;">Import Another File</button>
+          </div>
+        </div>
+
+        <!-- Progress -->
+        <div id="progressSection" style="display:none;margin-top:16px;">
+          <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:16px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:0.8125rem;color:var(--color-text-secondary);">Importing leads...</span>
+              <span id="progressText" style="font-size:0.8125rem;color:var(--color-primary);font-weight:600;">0%</span>
+            </div>
+            <div style="height:6px;background:var(--color-bg);border-radius:3px;overflow:hidden;">
+              <div id="progressBar" style="height:100%;background:var(--gradient-primary);border-radius:3px;width:0%;transition:width 0.3s ease;"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let csvData = [];
+    let csvHeaders = [];
+    let stages = [];
+    let industries = [];
+    let sources = [];
+
+    const LEAD_FIELDS = [
+      { value: '__skip__', label: '— Skip this column —' },
+      { value: 'contact_name', label: 'Contact Name' },
+      { value: 'company_name', label: 'Company Name' },
+      { value: 'emails', label: 'Email' },
+      { value: 'phones', label: 'Phone' },
+      { value: 'website', label: 'Website' },
+      { value: 'linkedin', label: 'LinkedIn URL' },
+      { value: 'address', label: 'Address' },
+      { value: 'industry', label: 'Industry' },
+      { value: 'company_size', label: 'Company Size' },
+      { value: 'revenue_estimate', label: 'Revenue Estimate' },
+      { value: 'lead_source', label: 'Lead Source' },
+      { value: 'deal_value', label: 'Deal Value' },
+      { value: 'assigned_to', label: 'Assigned To' },
+      { value: 'tags', label: 'Tags' },
+      { value: 'details', label: 'Details / Enrichment' },
+      { value: 'notes', label: 'Notes' }
+    ];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const [stagesRes, industriesRes, sourcesRes] = await Promise.all([
+        fetch('/api/stages').then(r => r.json()),
+        fetch('/api/industries').then(r => r.json()),
+        fetch('/api/sources').then(r => r.json())
+      ]);
+      stages = stagesRes.stages;
+      industries = industriesRes.industries;
+      sources = sourcesRes.sources;
+
+      // Populate dropdowns
+      document.getElementById('industrySelect').innerHTML =
+        industries.map(i => `<option value="${i}">${i}</option>`).join('');
+
+      document.getElementById('defaultStage').innerHTML =
+        stages.map(s => `<option value="${s.id}" ${s.id === 'cold' ? 'selected' : ''}>${s.label}</option>`).join('');
+
+      document.getElementById('defaultSource').innerHTML =
+        '<option value="">None</option>' +
+        sources.map(s => `<option value="${s}">${s}</option>`).join('');
+
+      // Industry mode toggle
+      document.getElementById('industryMode').addEventListener('change', (e) => {
+        document.getElementById('industrySelectGroup').style.display = e.target.value === 'select_existing' ? 'block' : 'none';
+        document.getElementById('industryCustomGroup').style.display = e.target.value === 'custom' ? 'block' : 'none';
+      });
+
+      // File input
+      document.getElementById('csvFileInput').addEventListener('change', handleFileUpload);
+    });
+
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById('fileName').textContent = file.name;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        parseCSV(ev.target.result);
+        goToStep(2);
+      };
+      reader.readAsText(file);
+    }
+
+    function parseCSV(text) {
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) {
+        showToast('CSV file must have at least a header row and one data row', 'error');
+        return;
+      }
+
+      csvHeaders = parseCSVLine(lines[0]);
+      csvData = [];
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseCSVLine(lines[i]);
+        if (row.length > 0 && row.some(cell => cell.trim())) {
+          csvData.push(row);
+        }
+      }
+
+      renderMappingTable();
+    }
+
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+          if (ch === '"' && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else if (ch === '"') {
+            inQuotes = false;
+          } else {
+            current += ch;
+          }
+        } else {
+          if (ch === '"') {
+            inQuotes = true;
+          } else if (ch === ',') {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += ch;
+          }
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    function renderMappingTable() {
+      const tbody = document.getElementById('mappingBody');
+      tbody.innerHTML = csvHeaders.map((header, idx) => {
+        const sampleValues = csvData.slice(0, 3).map(row => row[idx] || '').filter(Boolean).join(' | ');
+        const guessedField = guessFieldMapping(header);
+
+        return `
+          <tr>
+            <td style="font-weight:600;color:var(--color-text);">${esc(header)}</td>
+            <td style="font-size:0.75rem;color:var(--color-text-muted);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(sampleValues)}</td>
+            <td>
+              <select class="mapping-select" data-col="${idx}">
+                ${LEAD_FIELDS.map(f => `<option value="${f.value}" ${f.value === guessedField ? 'selected' : ''}>${f.label}</option>`).join('')}
+              </select>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function guessFieldMapping(header) {
+      const h = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const map = {
+        'name': 'contact_name', 'contactname': 'contact_name', 'fullname': 'contact_name', 'contact': 'contact_name',
+        'company': 'company_name', 'companyname': 'company_name', 'business': 'company_name', 'businessname': 'company_name',
+        'email': 'emails', 'emailaddress': 'emails', 'mail': 'emails',
+        'phone': 'phones', 'phonenumber': 'phones', 'tel': 'phones', 'telephone': 'phones', 'mobile': 'phones',
+        'website': 'website', 'url': 'website', 'site': 'website', 'web': 'website',
+        'linkedin': 'linkedin', 'linkedinurl': 'linkedin',
+        'address': 'address', 'location': 'address', 'city': 'address',
+        'industry': 'industry', 'category': 'industry', 'sector': 'industry', 'type': 'industry',
+        'size': 'company_size', 'employees': 'company_size', 'companysize': 'company_size',
+        'revenue': 'revenue_estimate', 'revenueestimate': 'revenue_estimate',
+        'source': 'lead_source', 'leadsource': 'lead_source',
+        'deal': 'deal_value', 'dealvalue': 'deal_value', 'value': 'deal_value',
+        'assigned': 'assigned_to', 'assignedto': 'assigned_to', 'owner': 'assigned_to',
+        'tags': 'tags', 'tag': 'tags', 'labels': 'tags',
+        'details': 'details', 'notes': 'notes', 'description': 'details', 'enrichment': 'details'
+      };
+      return map[h] || '__skip__';
+    }
+
+    function goToStep(step) {
+      document.getElementById('step1').style.display = step === 1 ? 'block' : 'none';
+      document.getElementById('step2').style.display = step === 2 ? 'block' : 'none';
+      document.getElementById('step3').style.display = step === 3 ? 'block' : 'none';
+      document.getElementById('step4').style.display = step === 4 ? 'block' : 'none';
+
+      if (step === 3) renderPreview();
+    }
+
+    function getMapping() {
+      const mapping = {};
+      document.querySelectorAll('.mapping-select').forEach(sel => {
+        const col = parseInt(sel.dataset.col);
+        const field = sel.value;
+        if (field !== '__skip__') {
+          mapping[col] = field;
+        }
+      });
+      return mapping;
+    }
+
+    function buildLeadFromRow(row, mapping) {
+      const lead = {};
+      Object.entries(mapping).forEach(([col, field]) => {
+        const val = row[parseInt(col)] || '';
+        if (field === 'emails') {
+          lead.emails = val.split(/[,;]/).map(e => e.trim()).filter(Boolean);
+        } else if (field === 'phones') {
+          lead.phones = val.split(/[,;]/).map(p => p.trim()).filter(Boolean);
+        } else if (field === 'tags') {
+          lead.tags = val.split(/[,;]/).map(t => t.trim()).filter(Boolean);
+        } else if (field === 'deal_value') {
+          lead.deal_value = parseFloat(val.replace(/[^0-9.-]/g, '')) || 0;
+        } else {
+          lead[field] = val;
+        }
+      });
+
+      // Industry override
+      const industryMode = document.getElementById('industryMode').value;
+      if (industryMode === 'select_existing') {
+        lead.industry = document.getElementById('industrySelect').value;
+      } else if (industryMode === 'custom') {
+        lead.industry = document.getElementById('industryCustomInput').value.trim();
+      }
+
+      // Default stage and source
+      lead.stage = lead.stage || document.getElementById('defaultStage').value;
+      lead.lead_source = lead.lead_source || document.getElementById('defaultSource').value;
+
+      return lead;
+    }
+
+    function renderPreview() {
+      const mapping = getMapping();
+      const fields = Object.values(mapping);
+      const fieldLabels = fields.map(f => LEAD_FIELDS.find(lf => lf.value === f)?.label || f);
+
+      document.getElementById('previewHead').innerHTML =
+        fieldLabels.map(l => `<th>${l}</th>`).join('');
+
+      const previewRows = csvData.slice(0, 5);
+      document.getElementById('previewBody').innerHTML = previewRows.map(row => {
+        return '<tr>' + Object.keys(mapping).map(col => {
+          return `<td>${esc(row[parseInt(col)] || '')}</td>`;
+        }).join('') + '</tr>';
+      }).join('');
+
+      document.getElementById('totalRows').textContent = csvData.length;
+    }
+
+    async function executeImport() {
+      const mapping = getMapping();
+      const btn = document.getElementById('importBtn');
+      btn.disabled = true;
+      btn.innerHTML = '&#8987; Importing...';
+
+      document.getElementById('progressSection').style.display = 'block';
+
+      let created = 0;
+      let failed = 0;
+      let duplicates = 0;
+      const errors = [];
+
+      for (let i = 0; i < csvData.length; i++) {
+        const lead = buildLeadFromRow(csvData[i], mapping);
+        lead._source = 'csv_import';
+
+        try {
+          const res = await fetch('/api/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(lead)
+          });
+
+          if (res.ok) {
+            created++;
+          } else {
+            const err = await res.json();
+            if (err.error && err.error.includes('duplicate')) {
+              duplicates++;
+            } else {
+              failed++;
+              errors.push(`Row ${i + 2}: ${err.error || 'Unknown error'}`);
+            }
+          }
+        } catch (e) {
+          failed++;
+          errors.push(`Row ${i + 2}: ${e.message}`);
+        }
+
+        // Update progress
+        const pct = Math.round(((i + 1) / csvData.length) * 100);
+        document.getElementById('progressBar').style.width = pct + '%';
+        document.getElementById('progressText').textContent = pct + '%';
+      }
+
+      // Show results
+      document.getElementById('progressSection').style.display = 'none';
+      document.getElementById('importResults').innerHTML = `
+        <div class="stats-row" style="margin-bottom:16px;">
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--color-success);">${created}</div>
+            <div class="stat-label">Created</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--color-warning);">${duplicates}</div>
+            <div class="stat-label">Duplicates Skipped</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--color-danger);">${failed}</div>
+            <div class="stat-label">Failed</div>
+          </div>
+        </div>
+        ${errors.length > 0 ? `
+          <div style="background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.2);border-radius:var(--radius-sm);padding:12px;font-size:0.8125rem;color:var(--color-text-secondary);max-height:200px;overflow-y:auto;">
+            <strong style="color:var(--color-danger);">Errors:</strong><br>
+            ${errors.map(e => esc(e)).join('<br>')}
+          </div>
+        ` : ''}
+      `;
+
+      goToStep(4);
+    }
+
+    function resetImport() {
+      csvData = [];
+      csvHeaders = [];
+      document.getElementById('csvFileInput').value = '';
+      document.getElementById('fileName').textContent = 'No file selected';
+      document.getElementById('importBtn').disabled = false;
+      document.getElementById('importBtn').innerHTML = '&#10003; Import All Leads';
+      goToStep(1);
+    }
+
+    function esc(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast ' + type;
+      setTimeout(() => t.classList.add('visible'), 10);
+      setTimeout(() => t.classList.remove('visible'), 3000);
+    }
+  </script>
+</body>
+</html>

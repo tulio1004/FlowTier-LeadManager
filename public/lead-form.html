@@ -12,7 +12,7 @@
   <div class="app-shell">
 
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
         <img src="/static/images/logo.webp" alt="FlowTier">
         <div class="app-label">Lead Management</div>
@@ -30,14 +30,27 @@
     <main class="main-content">
 
       <div class="page-header">
-        <h1 id="pageTitle">New <span>Lead</span></h1>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">&#9776;</button>
+          <h1 id="pageTitle">New <span>Lead</span></h1>
+        </div>
         <div class="header-actions">
-          <a href="/" class="btn btn-secondary btn-sm">Cancel</a>
-          <button class="btn btn-primary" id="saveBtn">&#10003; Save Lead</button>
+          <a href="/" class="btn btn-secondary">Cancel</a>
+          <button class="btn btn-primary" id="saveBtn" onclick="saveLead()">&#10003; Save Lead</button>
         </div>
       </div>
 
-      <div style="max-width:800px;">
+      <!-- Duplicate Warning -->
+      <div class="overdue-alert" id="duplicateWarning" style="display:none;">
+        <span class="icon">&#9888;</span>
+        <div>
+          <strong>Possible duplicate detected!</strong>
+          <span id="duplicateMsg"></span>
+          <a href="#" id="duplicateLink" target="_blank" style="margin-left:8px;">View existing lead</a>
+        </div>
+      </div>
+
+      <div class="form-container">
 
         <!-- Contact Info -->
         <div class="form-section">
@@ -49,27 +62,27 @@
             </div>
             <div class="form-group">
               <label>Company Name</label>
-              <input type="text" id="companyName" placeholder="Acme Corp">
+              <input type="text" id="companyName" placeholder="Acme Corp" oninput="checkDuplicate()">
             </div>
             <div class="form-group full-width">
-              <label>Email(s) <span style="font-weight:400;text-transform:none;letter-spacing:0;">(comma separated for multiple)</span></label>
-              <input type="text" id="emails" placeholder="john@acme.com, info@acme.com">
+              <label>Email(s) <small style="color:var(--color-text-muted);text-transform:none;letter-spacing:0;">(comma separated for multiple)</small></label>
+              <input type="text" id="emails" placeholder="john@acme.com, sales@acme.com" oninput="checkDuplicate()">
             </div>
             <div class="form-group full-width">
-              <label>Phone(s) <span style="font-weight:400;text-transform:none;letter-spacing:0;">(comma separated for multiple)</span></label>
-              <input type="text" id="phones" placeholder="+1 555-123-4567, +1 555-987-6543">
+              <label>Phone(s) <small style="color:var(--color-text-muted);text-transform:none;letter-spacing:0;">(comma separated for multiple)</small></label>
+              <input type="text" id="phones" placeholder="+1 555-123-4567">
             </div>
             <div class="form-group">
               <label>Website</label>
-              <input type="url" id="website" placeholder="https://acme.com">
+              <input type="text" id="website" placeholder="acmecorp.com">
             </div>
             <div class="form-group">
               <label>LinkedIn URL</label>
-              <input type="url" id="linkedin" placeholder="https://linkedin.com/in/johnsmith">
+              <input type="text" id="linkedin" placeholder="https://linkedin.com/in/johnsmith">
             </div>
             <div class="form-group full-width">
               <label>Address</label>
-              <input type="text" id="address" placeholder="123 Main St, Boston, MA 02101">
+              <input type="text" id="address" placeholder="123 Main St, City, State, ZIP">
             </div>
           </div>
         </div>
@@ -80,7 +93,10 @@
           <div class="form-grid">
             <div class="form-group">
               <label>Industry</label>
-              <select id="industry"></select>
+              <select id="industry">
+                <option value="">Select Industry...</option>
+              </select>
+              <input type="text" id="customIndustry" placeholder="Enter custom industry name..." style="display:none;margin-top:8px;">
             </div>
             <div class="form-group">
               <label>Company Size</label>
@@ -90,42 +106,37 @@
                 <option value="11-50">11-50 employees</option>
                 <option value="51-200">51-200 employees</option>
                 <option value="201-500">201-500 employees</option>
-                <option value="500+">500+ employees</option>
+                <option value="501+">501+ employees</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Lead Source</label>
+              <select id="leadSource">
+                <option value="">Select...</option>
               </select>
             </div>
             <div class="form-group">
               <label>Revenue Estimate</label>
-              <input type="text" id="revenueEstimate" placeholder="$1M - $5M">
+              <input type="text" id="revenueEstimate" placeholder="$500K - $1M">
             </div>
             <div class="form-group">
-              <label>Lead Source</label>
-              <input type="text" id="leadSource" placeholder="Make.com, Referral, Cold Outreach...">
+              <label>Deal Value ($)</label>
+              <input type="number" id="dealValue" placeholder="5000">
             </div>
-          </div>
-        </div>
-
-        <!-- Pipeline -->
-        <div class="form-section">
-          <h3>Pipeline</h3>
-          <div class="form-grid">
             <div class="form-group">
               <label>Stage</label>
               <select id="stage"></select>
             </div>
             <div class="form-group">
-              <label>Deal Value ($)</label>
-              <input type="number" id="dealValue" placeholder="5000" min="0" step="100">
+              <label>Next Follow-up Date</label>
+              <input type="datetime-local" id="nextFollowup">
             </div>
             <div class="form-group">
               <label>Assigned To</label>
               <input type="text" id="assignedTo" placeholder="Team member name">
             </div>
-            <div class="form-group">
-              <label>Next Follow-up Date</label>
-              <input type="datetime-local" id="nextFollowup">
-            </div>
             <div class="form-group full-width">
-              <label>Tags <span style="font-weight:400;text-transform:none;letter-spacing:0;">(comma separated)</span></label>
+              <label>Tags <small style="color:var(--color-text-muted);text-transform:none;letter-spacing:0;">(comma separated)</small></label>
               <input type="text" id="tags" placeholder="high-priority, dental, follow-up-needed">
             </div>
             <div class="form-group full-width">
@@ -135,17 +146,9 @@
           </div>
         </div>
 
-        <!-- Enrichment -->
+        <!-- Calendar Event -->
         <div class="form-section">
-          <h3>Enrichment Data / Details</h3>
-          <div class="form-group" style="margin-bottom:0;">
-            <textarea id="details" rows="6" placeholder="Paste enrichment data, research notes, or any relevant details about this lead..."></textarea>
-          </div>
-        </div>
-
-        <!-- Calendar Event (for Call Booked) -->
-        <div class="form-section" id="calendarSection">
-          <h3>Calendar Event <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.75rem;color:var(--color-text-muted);">(optional — for Call Booked stage)</span></h3>
+          <h3>Calendar Event <small style="color:var(--color-text-muted);text-transform:none;letter-spacing:0;">(optional — for Call Booked stage)</small></h3>
           <div class="form-grid">
             <div class="form-group full-width">
               <label>Event Title</label>
@@ -174,61 +177,105 @@
           </div>
         </div>
 
+        <!-- Enrichment Data -->
+        <div class="form-section">
+          <h3>Enrichment / Details</h3>
+          <div class="form-group" style="margin-bottom:0;">
+            <textarea id="details" rows="6" placeholder="Add any enrichment data, research notes, or additional information about this lead..."></textarea>
+          </div>
+        </div>
+
+        <!-- Custom Fields -->
+        <div class="form-section">
+          <h3>
+            Custom Fields
+            <button class="btn btn-secondary btn-sm" onclick="addCustomField()" style="float:right;">&#43; Add Field</button>
+          </h3>
+          <div id="customFieldsContainer"></div>
+          <div id="noCustomFields" style="color:var(--color-text-muted);font-size:0.8125rem;">No custom fields. Click "+ Add Field" to add one.</div>
+        </div>
+
         <!-- JSON Import -->
         <div class="form-section">
-          <h3>JSON Import <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.75rem;color:var(--color-text-muted);">(paste lead JSON to auto-fill)</span></h3>
+          <h3>Quick Import</h3>
           <div class="form-group" style="margin-bottom:8px;">
-            <textarea id="jsonImport" rows="4" placeholder='{"company_name": "Acme Corp", "contact_name": "John Smith", ...}'></textarea>
+            <label>Paste JSON to auto-fill fields</label>
+            <textarea id="jsonImport" rows="4" placeholder='{"contact_name": "John", "company_name": "Acme", "emails": ["john@acme.com"], ...}'></textarea>
           </div>
-          <button class="btn btn-secondary btn-sm" id="parseJsonBtn">Parse JSON</button>
+          <button class="btn btn-secondary btn-sm" onclick="importJson()">&#8681; Import JSON</button>
         </div>
 
       </div>
-
     </main>
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script>
+    let editMode = false;
     let editId = null;
     let stages = [];
     let industries = [];
-
-    // Check if editing
-    const pathParts = window.location.pathname.split('/');
-    if (pathParts[1] === 'edit' && pathParts[2]) {
-      editId = pathParts[2];
-    }
+    let sources = [];
+    let customFieldCount = 0;
 
     document.addEventListener('DOMContentLoaded', async () => {
-      const [stagesRes, industriesRes] = await Promise.all([
+      const [stagesRes, industriesRes, sourcesRes] = await Promise.all([
         fetch('/api/stages').then(r => r.json()),
-        fetch('/api/industries').then(r => r.json())
+        fetch('/api/industries').then(r => r.json()),
+        fetch('/api/sources').then(r => r.json())
       ]);
       stages = stagesRes.stages;
       industries = industriesRes.industries;
+      sources = sourcesRes.sources;
 
-      // Populate selects
-      document.getElementById('industry').innerHTML =
-        '<option value="">Select Industry...</option>' +
-        industries.map(i => `<option value="${i}">${i}</option>`).join('');
+      populateDropdowns();
 
-      document.getElementById('stage').innerHTML =
-        stages.map(s => `<option value="${s.id}">${s.label} — ${s.description}</option>`).join('');
-
-      if (editId) {
+      // Check if editing
+      const path = window.location.pathname;
+      if (path.startsWith('/edit/')) {
+        editId = path.split('/edit/')[1];
+        editMode = true;
         document.getElementById('pageTitle').innerHTML = 'Edit <span>Lead</span>';
         document.title = 'Edit Lead — FlowTier Leads';
-        await loadExisting();
+        document.getElementById('saveBtn').innerHTML = '&#10003; Save Changes';
+        await loadExistingLead();
       }
-
-      setupEvents();
     });
 
-    async function loadExisting() {
+    function populateDropdowns() {
+      // Industry
+      const indSelect = document.getElementById('industry');
+      indSelect.innerHTML = '<option value="">Select Industry...</option>' +
+        industries.map(i => `<option value="${i}">${i}</option>`).join('') +
+        '<option value="__custom__">+ Custom Industry</option>';
+
+      indSelect.addEventListener('change', () => {
+        const customInput = document.getElementById('customIndustry');
+        if (indSelect.value === '__custom__') {
+          customInput.style.display = 'block';
+          customInput.focus();
+        } else {
+          customInput.style.display = 'none';
+          customInput.value = '';
+        }
+      });
+
+      // Source
+      const srcSelect = document.getElementById('leadSource');
+      srcSelect.innerHTML = '<option value="">Select...</option>' +
+        sources.map(s => `<option value="${s}">${s}</option>`).join('');
+
+      // Stage
+      const stageSelect = document.getElementById('stage');
+      stageSelect.innerHTML = stages.map(s =>
+        `<option value="${s.id}" ${s.id === 'cold' ? 'selected' : ''}>${s.label}</option>`
+      ).join('');
+    }
+
+    async function loadExistingLead() {
       const res = await fetch('/api/leads/' + editId);
-      if (!res.ok) return;
+      if (!res.ok) { showToast('Lead not found', 'error'); return; }
       const lead = await res.json();
 
       document.getElementById('contactName').value = lead.contact_name || '';
@@ -238,92 +285,209 @@
       document.getElementById('website').value = lead.website || '';
       document.getElementById('linkedin').value = lead.linkedin || '';
       document.getElementById('address').value = lead.address || '';
-      document.getElementById('industry').value = lead.industry || '';
       document.getElementById('companySize').value = lead.company_size || '';
       document.getElementById('revenueEstimate').value = lead.revenue_estimate || '';
-      document.getElementById('leadSource').value = lead.lead_source || '';
-      document.getElementById('stage').value = lead.stage || 'cold';
       document.getElementById('dealValue').value = lead.deal_value || '';
       document.getElementById('assignedTo').value = lead.assigned_to || '';
       document.getElementById('tags').value = (lead.tags || []).join(', ');
       document.getElementById('proposalUrl').value = lead.proposal_url || '';
       document.getElementById('details').value = lead.details || '';
+      document.getElementById('stage').value = lead.stage || 'cold';
 
+      // Industry
+      if (lead.industry) {
+        const indSelect = document.getElementById('industry');
+        if (industries.includes(lead.industry)) {
+          indSelect.value = lead.industry;
+        } else {
+          indSelect.value = '__custom__';
+          document.getElementById('customIndustry').style.display = 'block';
+          document.getElementById('customIndustry').value = lead.industry;
+        }
+      }
+
+      // Source
+      if (lead.lead_source) {
+        document.getElementById('leadSource').value = lead.lead_source;
+      }
+
+      // Follow-up
       if (lead.next_followup) {
-        document.getElementById('nextFollowup').value = lead.next_followup.slice(0, 16);
+        const d = new Date(lead.next_followup);
+        const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+        document.getElementById('nextFollowup').value = iso;
       }
 
       // Calendar
       if (lead.calendar_event) {
         document.getElementById('calTitle').value = lead.calendar_event.title || '';
-        if (lead.calendar_event.start_time) document.getElementById('calStart').value = lead.calendar_event.start_time.slice(0, 16);
-        if (lead.calendar_event.end_time) document.getElementById('calEnd').value = lead.calendar_event.end_time.slice(0, 16);
+        if (lead.calendar_event.start_time) {
+          const d = new Date(lead.calendar_event.start_time);
+          document.getElementById('calStart').value = d.toISOString().slice(0,16);
+        }
+        if (lead.calendar_event.end_time) {
+          const d = new Date(lead.calendar_event.end_time);
+          document.getElementById('calEnd').value = d.toISOString().slice(0,16);
+        }
         document.getElementById('calMeetLink').value = lead.calendar_event.meet_link || '';
         document.getElementById('calEventId').value = lead.calendar_event.event_id || '';
         document.getElementById('calDescription').value = lead.calendar_event.description || '';
       }
+
+      // Custom fields
+      if (lead.custom_fields) {
+        Object.entries(lead.custom_fields).forEach(([key, val]) => {
+          addCustomField(key, val);
+        });
+      }
     }
 
-    function setupEvents() {
-      document.getElementById('saveBtn').addEventListener('click', saveLead);
+    // ════════════════════════════════════════
+    // DUPLICATE DETECTION
+    // ════════════════════════════════════════
+    let dupTimeout;
+    async function checkDuplicate() {
+      clearTimeout(dupTimeout);
+      dupTimeout = setTimeout(async () => {
+        const company = document.getElementById('companyName').value.trim();
+        const email = document.getElementById('emails').value.split(',')[0].trim();
+        if (!company && !email) return;
 
-      document.getElementById('parseJsonBtn').addEventListener('click', () => {
-        try {
-          const json = JSON.parse(document.getElementById('jsonImport').value);
-          fillFromJson(json);
-          showToast('JSON parsed and fields populated', 'success');
-        } catch (e) {
-          showToast('Invalid JSON: ' + e.message, 'error');
+        const params = new URLSearchParams();
+        if (company) params.set('company_name', company);
+        if (email) params.set('email', email);
+        if (editId) params.set('exclude_id', editId);
+
+        const res = await fetch('/api/leads/check-duplicate?' + params.toString());
+        const data = await res.json();
+
+        const warning = document.getElementById('duplicateWarning');
+        if (data.duplicate) {
+          warning.style.display = 'flex';
+          document.getElementById('duplicateMsg').textContent =
+            ` A lead with ${data.match_type === 'email' ? 'this email' : 'this company name'} already exists: "${data.existing.company_name || data.existing.contact_name}".`;
+          document.getElementById('duplicateLink').href = '/lead/' + data.existing.id;
+        } else {
+          warning.style.display = 'none';
         }
-      });
+      }, 500);
     }
 
-    function fillFromJson(data) {
-      if (data.contact_name) document.getElementById('contactName').value = data.contact_name;
-      if (data.company_name) document.getElementById('companyName').value = data.company_name;
-      if (data.emails) document.getElementById('emails').value = Array.isArray(data.emails) ? data.emails.join(', ') : data.emails;
-      if (data.email) document.getElementById('emails').value = data.email;
-      if (data.phones) document.getElementById('phones').value = Array.isArray(data.phones) ? data.phones.join(', ') : data.phones;
-      if (data.phone) document.getElementById('phones').value = data.phone;
-      if (data.website) document.getElementById('website').value = data.website;
-      if (data.linkedin) document.getElementById('linkedin').value = data.linkedin;
-      if (data.address) document.getElementById('address').value = data.address;
-      if (data.industry) document.getElementById('industry').value = data.industry;
-      if (data.company_size) document.getElementById('companySize').value = data.company_size;
-      if (data.revenue_estimate) document.getElementById('revenueEstimate').value = data.revenue_estimate;
-      if (data.lead_source) document.getElementById('leadSource').value = data.lead_source;
-      if (data.stage) document.getElementById('stage').value = data.stage;
-      if (data.deal_value) document.getElementById('dealValue').value = data.deal_value;
-      if (data.assigned_to) document.getElementById('assignedTo').value = data.assigned_to;
-      if (data.tags) document.getElementById('tags').value = Array.isArray(data.tags) ? data.tags.join(', ') : data.tags;
-      if (data.proposal_url) document.getElementById('proposalUrl').value = data.proposal_url;
-      if (data.details) document.getElementById('details').value = data.details;
+    // ════════════════════════════════════════
+    // CUSTOM FIELDS
+    // ════════════════════════════════════════
+    function addCustomField(key, value) {
+      customFieldCount++;
+      document.getElementById('noCustomFields').style.display = 'none';
+      const container = document.getElementById('customFieldsContainer');
+      const row = document.createElement('div');
+      row.className = 'form-grid';
+      row.style.marginBottom = '8px';
+      row.id = 'customField_' + customFieldCount;
+      row.innerHTML = `
+        <div class="form-group" style="margin-bottom:0;">
+          <input type="text" class="cf-key" placeholder="Field name (e.g., License Number)" value="${esc(key || '')}">
+        </div>
+        <div class="form-group" style="margin-bottom:0;display:flex;gap:8px;">
+          <input type="text" class="cf-value" placeholder="Value" value="${esc(value || '')}" style="flex:1;">
+          <button class="btn-icon" onclick="removeCustomField(${customFieldCount})" title="Remove">&times;</button>
+        </div>
+      `;
+      container.appendChild(row);
     }
 
+    function removeCustomField(id) {
+      document.getElementById('customField_' + id).remove();
+      if (document.getElementById('customFieldsContainer').children.length === 0) {
+        document.getElementById('noCustomFields').style.display = 'block';
+      }
+    }
+
+    // ════════════════════════════════════════
+    // JSON IMPORT
+    // ════════════════════════════════════════
+    function importJson() {
+      try {
+        const raw = document.getElementById('jsonImport').value.trim();
+        if (!raw) return;
+        const data = JSON.parse(raw);
+
+        if (data.contact_name) document.getElementById('contactName').value = data.contact_name;
+        if (data.company_name) document.getElementById('companyName').value = data.company_name;
+        if (data.emails) document.getElementById('emails').value = Array.isArray(data.emails) ? data.emails.join(', ') : data.emails;
+        if (data.email) document.getElementById('emails').value = data.email;
+        if (data.phones) document.getElementById('phones').value = Array.isArray(data.phones) ? data.phones.join(', ') : data.phones;
+        if (data.phone) document.getElementById('phones').value = data.phone;
+        if (data.website) document.getElementById('website').value = data.website;
+        if (data.linkedin) document.getElementById('linkedin').value = data.linkedin;
+        if (data.address) document.getElementById('address').value = data.address;
+        if (data.company_size) document.getElementById('companySize').value = data.company_size;
+        if (data.revenue_estimate) document.getElementById('revenueEstimate').value = data.revenue_estimate;
+        if (data.deal_value) document.getElementById('dealValue').value = data.deal_value;
+        if (data.assigned_to) document.getElementById('assignedTo').value = data.assigned_to;
+        if (data.tags) document.getElementById('tags').value = Array.isArray(data.tags) ? data.tags.join(', ') : data.tags;
+        if (data.proposal_url) document.getElementById('proposalUrl').value = data.proposal_url;
+        if (data.details) document.getElementById('details').value = data.details;
+        if (data.industry) {
+          const indSelect = document.getElementById('industry');
+          if (industries.includes(data.industry)) {
+            indSelect.value = data.industry;
+          } else {
+            indSelect.value = '__custom__';
+            document.getElementById('customIndustry').style.display = 'block';
+            document.getElementById('customIndustry').value = data.industry;
+          }
+        }
+        if (data.lead_source) document.getElementById('leadSource').value = data.lead_source;
+        if (data.stage) document.getElementById('stage').value = data.stage;
+        if (data.custom_fields) {
+          Object.entries(data.custom_fields).forEach(([k, v]) => addCustomField(k, v));
+        }
+
+        showToast('JSON imported successfully', 'success');
+      } catch (e) {
+        showToast('Invalid JSON: ' + e.message, 'error');
+      }
+    }
+
+    // ════════════════════════════════════════
+    // SAVE
+    // ════════════════════════════════════════
     async function saveLead() {
-      const emailsRaw = document.getElementById('emails').value;
-      const phonesRaw = document.getElementById('phones').value;
-      const tagsRaw = document.getElementById('tags').value;
+      const industrySelect = document.getElementById('industry');
+      let industry = industrySelect.value;
+      if (industry === '__custom__') {
+        industry = document.getElementById('customIndustry').value.trim();
+      }
+
+      // Collect custom fields
+      const customFields = {};
+      document.querySelectorAll('#customFieldsContainer > div').forEach(row => {
+        const key = row.querySelector('.cf-key').value.trim();
+        const val = row.querySelector('.cf-value').value.trim();
+        if (key) customFields[key] = val;
+      });
 
       const payload = {
         contact_name: document.getElementById('contactName').value.trim(),
         company_name: document.getElementById('companyName').value.trim(),
-        emails: emailsRaw.split(',').map(e => e.trim()).filter(Boolean),
-        phones: phonesRaw.split(',').map(p => p.trim()).filter(Boolean),
+        emails: document.getElementById('emails').value.split(',').map(e => e.trim()).filter(Boolean),
+        phones: document.getElementById('phones').value.split(',').map(p => p.trim()).filter(Boolean),
         website: document.getElementById('website').value.trim(),
         linkedin: document.getElementById('linkedin').value.trim(),
         address: document.getElementById('address').value.trim(),
-        industry: document.getElementById('industry').value,
+        industry: industry,
         company_size: document.getElementById('companySize').value,
+        lead_source: document.getElementById('leadSource').value,
         revenue_estimate: document.getElementById('revenueEstimate').value.trim(),
-        lead_source: document.getElementById('leadSource').value.trim(),
-        stage: document.getElementById('stage').value,
         deal_value: parseFloat(document.getElementById('dealValue').value) || 0,
+        stage: document.getElementById('stage').value,
         assigned_to: document.getElementById('assignedTo').value.trim(),
-        tags: tagsRaw.split(',').map(t => t.trim()).filter(Boolean),
+        tags: document.getElementById('tags').value.split(',').map(t => t.trim()).filter(Boolean),
         proposal_url: document.getElementById('proposalUrl').value.trim(),
         details: document.getElementById('details').value.trim(),
         next_followup: document.getElementById('nextFollowup').value ? new Date(document.getElementById('nextFollowup').value).toISOString() : null,
+        custom_fields: Object.keys(customFields).length > 0 ? customFields : undefined,
         _source: 'manual'
       };
 
@@ -342,39 +506,45 @@
         };
       }
 
-      if (!payload.company_name && !payload.contact_name) {
-        showToast('Please enter at least a company name or contact name', 'error');
+      if (!payload.contact_name && !payload.company_name) {
+        showToast('Please enter at least a contact name or company name', 'error');
         return;
       }
 
-      try {
-        let res;
-        if (editId) {
-          res = await fetch('/api/leads/' + editId, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        } else {
-          res = await fetch('/api/leads', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        }
-
-        const data = await res.json();
-        if (data.success) {
-          showToast(editId ? 'Lead updated' : 'Lead created', 'success');
-          setTimeout(() => {
-            window.location.href = '/lead/' + data.lead.id;
-          }, 500);
-        } else {
-          showToast(data.error || 'Failed to save', 'error');
-        }
-      } catch (err) {
-        showToast('Error: ' + err.message, 'error');
+      let res;
+      if (editMode) {
+        res = await fetch('/api/leads/' + editId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
       }
+
+      const data = await res.json();
+      if (res.ok) {
+        showToast(editMode ? 'Lead updated!' : 'Lead created!', 'success');
+        setTimeout(() => {
+          window.location.href = '/lead/' + (data.id || editId);
+        }, 500);
+      } else {
+        showToast(data.error || 'Failed to save', 'error');
+      }
+    }
+
+    // ════════════════════════════════════════
+    // HELPERS
+    // ════════════════════════════════════════
+    function esc(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
     }
 
     function showToast(msg, type) {

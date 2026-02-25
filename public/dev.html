@@ -229,6 +229,26 @@
           <div class="code-block" id="payload_lead_note_added" style="display:none;"></div>
           <div class="test-result" id="result_lead_note_added"></div>
         </div>
+
+        <!-- Test: Outreach Logged -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128232; lead_outreach_logged</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('lead_outreach_logged')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when an outreach email/message is logged for a lead. Auto-moves Cold leads to Contacted.</div>
+          <button class="payload-toggle" onclick="togglePayload('lead_outreach_logged')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_lead_outreach_logged" style="display:none;"></div>
+          <div class="test-result" id="result_lead_outreach_logged"></div>
+        </div>
+
+        <!-- Webhook History -->
+        <div style="margin-top:24px;">
+          <h3 style="font-size:0.9375rem;font-weight:700;margin-bottom:12px;">Webhook Delivery History</h3>
+          <p style="font-size:0.8125rem;color:var(--color-text-secondary);margin-bottom:12px;">Shows the last 50 webhook deliveries with status and response details.</p>
+          <button class="btn btn-secondary btn-sm" onclick="loadWebhookHistory()" style="margin-bottom:12px;">&#8635; Refresh History</button>
+          <div id="webhookHistoryList" style="max-height:300px;overflow-y:auto;"></div>
+        </div>
       </div>
 
       <!-- ═══════════════════════════════════ -->
@@ -246,6 +266,8 @@
         <div class="tab-bar">
           <button class="tab-btn active" onclick="switchTab('leads')">Leads CRUD</button>
           <button class="tab-btn" onclick="switchTab('notes')">Notes</button>
+          <button class="tab-btn" onclick="switchTab('outreach')">Outreach</button>
+          <button class="tab-btn" onclick="switchTab('attachments')">Attachments</button>
           <button class="tab-btn" onclick="switchTab('calendar')">Calendar</button>
           <button class="tab-btn" onclick="switchTab('bulk')">Bulk Actions</button>
           <button class="tab-btn" onclick="switchTab('import')">Import / Export</button>
@@ -339,9 +361,10 @@ PATCH /api/leads/abc-123
               <span class="method-badge post">POST</span>
               <span class="endpoint-path">/api/leads/:id/notes</span>
             </div>
-            <div class="endpoint-desc">Add a note to a lead. Use for call snapshots, follow-ups, or research notes.</div>
+            <div class="endpoint-desc">Add a rich text note to a lead. Supports HTML content with images. Types: note, call_snapshot, follow_up, research.</div>
             <div class="code-block">{
-  "content": "Had a great discovery call. They're interested in AI chatbot + appointment booking. Budget around $5K/month. Decision maker is the office manager, not the owner. Follow up next Tuesday.",
+  "title": "Discovery Call - Key Takeaways",
+  "content": "&lt;h2&gt;Key Takeaways&lt;/h2&gt;&lt;p&gt;They need AI chatbot + appointment booking...&lt;/p&gt;",
   "type": "call_snapshot"
 }
 
@@ -350,10 +373,81 @@ PATCH /api/leads/abc-123
 
           <div class="endpoint-card">
             <div class="endpoint-header">
+              <span class="method-badge put">PUT</span>
+              <span class="endpoint-path">/api/leads/:id/notes/:noteId</span>
+            </div>
+            <div class="endpoint-desc">Update an existing note (title, type, content).</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
               <span class="method-badge delete">DELETE</span>
               <span class="endpoint-path">/api/leads/:id/notes/:noteId</span>
             </div>
             <div class="endpoint-desc">Delete a specific note from a lead.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/upload/image</span>
+            </div>
+            <div class="endpoint-desc">Upload an image for use in rich text notes. Use multipart/form-data with field name <code>image</code>. Returns <code>{ "url": "/uploads/..." }</code>.</div>
+          </div>
+        </div>
+
+        <!-- OUTREACH TAB -->
+        <div class="tab-content" id="tab-outreach">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads/:id/outreach</span>
+            </div>
+            <div class="endpoint-desc">Log an outreach interaction. Triggers <code>lead_outreach_logged</code> webhook. Auto-moves Cold leads to Contacted.</div>
+            <div class="code-block">{
+  "direction": "sent",
+  "channel": "email",
+  "subject": "Introduction - AI Automation for Your Business",
+  "body": "Hi Sarah, I wanted to reach out about how we can help..."
+}
+
+// direction: "sent" or "received"
+// channel: "email", "sms", "call", "linkedin", "other"</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/leads/:id/outreach</span>
+            </div>
+            <div class="endpoint-desc">Get all outreach entries for a lead, sorted by date (newest first).</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge delete">DELETE</span>
+              <span class="endpoint-path">/api/leads/:id/outreach/:outreachId</span>
+            </div>
+            <div class="endpoint-desc">Delete an outreach entry.</div>
+          </div>
+        </div>
+
+        <!-- ATTACHMENTS TAB -->
+        <div class="tab-content" id="tab-attachments">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/leads/:id/attachments</span>
+            </div>
+            <div class="endpoint-desc">Upload a file attachment to a lead. Use multipart/form-data with field name <code>file</code>.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge delete">DELETE</span>
+              <span class="endpoint-path">/api/leads/:id/attachments/:attId</span>
+            </div>
+            <div class="endpoint-desc">Delete a file attachment from a lead.</div>
           </div>
         </div>
 
@@ -529,7 +623,11 @@ Tags, Stage, Assigned To, Deal Value, Details
               <tr><td><code>next_followup</code></td><td>ISO date</td><td>Next follow-up date</td></tr>
               <tr><td><code>calendar_event</code></td><td>object</td><td>Google Calendar event details</td></tr>
               <tr><td><code>proposal_url</code></td><td>string</td><td>Link to proposal on proposals.flowtier.io</td></tr>
-              <tr><td><code>notes</code></td><td>object[]</td><td>Array of notes with id, content, type, created_at</td></tr>
+              <tr><td><code>notes</code></td><td>object[]</td><td>Array of rich text notes with id, title, content (HTML), type, created_at</td></tr>
+              <tr><td><code>outreach</code></td><td>object[]</td><td>Array of outreach entries with id, direction, channel, subject, body, created_at</td></tr>
+              <tr><td><code>attachments</code></td><td>object[]</td><td>Array of file attachments with id, filename, path, size, created_at</td></tr>
+              <tr><td><code>custom_fields</code></td><td>object</td><td>Key-value pairs for custom fields</td></tr>
+              <tr><td><code>lead_score</code></td><td>number</td><td>Auto-calculated lead score (0-100)</td></tr>
               <tr><td><code>activity</code></td><td>object[]</td><td>Activity timeline entries</td></tr>
               <tr><td><code>created_at</code></td><td>ISO date</td><td>Creation timestamp</td></tr>
               <tr><td><code>updated_at</code></td><td>ISO date</td><td>Last update timestamp</td></tr>
@@ -575,8 +673,8 @@ Body:
   lead_call_booked    — Calendar event attached to lead
 
 Headers included:
-  X-Source: flowtier-lead-system
-  X-Event-Type: lead_created | lead_stage_changed | lead_call_booked</div>
+          X-Source: flowtier-lead-system
+  X-Event-Type: lead_created | lead_stage_changed | lead_call_booked | lead_outreach_logged</div>
         </div>
 
         <div class="endpoint-card">
@@ -672,8 +770,26 @@ Body:
         contact_name: 'Sarah Mitchell',
         note: {
           id: 'note-test-' + Date.now(),
-          content: 'Great discovery call. They want AI chatbot for appointment booking. Budget is $5K/month. Decision maker is the office manager. Follow up next Tuesday with a proposal.',
+          title: 'Discovery Call - Key Takeaways',
+          content: '<h2>Key Takeaways</h2><p>They want AI chatbot for appointment booking. Budget is $5K/month. Decision maker is the office manager.</p>',
           type: 'call_snapshot',
+          created_at: new Date().toISOString()
+        }
+      },
+      lead_outreach_logged: {
+        event: 'lead_outreach_logged',
+        timestamp: new Date().toISOString(),
+        lead_id: 'test-uuid-' + Date.now(),
+        company_name: 'Brightside Dental',
+        contact_name: 'Sarah Mitchell',
+        emails: ['sarah@brightsidedental.com'],
+        stage: 'contacted',
+        outreach: {
+          id: 'outreach-test-' + Date.now(),
+          direction: 'sent',
+          channel: 'email',
+          subject: 'AI Automation for Brightside Dental',
+          body: 'Hi Sarah, I wanted to reach out about how we can help automate your front office operations with AI...',
           created_at: new Date().toISOString()
         }
       }
@@ -769,6 +885,30 @@ Body:
     function togglePayload(eventType) {
       const el = document.getElementById('payload_' + eventType);
       el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function loadWebhookHistory() {
+      const list = document.getElementById('webhookHistoryList');
+      list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">Loading...</div>';
+      try {
+        const res = await fetch('/api/webhook-history');
+        const data = await res.json();
+        const history = data.history || [];
+        if (history.length === 0) {
+          list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">No webhook deliveries yet.</div>';
+          return;
+        }
+        list.innerHTML = history.map(h => `
+          <div style="padding:8px 12px;border-bottom:1px solid var(--color-border-light);font-size:0.75rem;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <span style="font-weight:600;">${h.event}</span>
+            <span style="color:var(--color-text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h.url ? h.url.substring(0, 50) + '...' : 'N/A'}</span>
+            <span style="color:${h.success ? 'var(--color-success)' : 'var(--color-danger)'};">${h.success ? '\u2713 ' + h.status_code : '\u2717 ' + (h.error || 'Failed')}</span>
+            <span style="color:var(--color-text-muted);">${new Date(h.timestamp).toLocaleString()}</span>
+          </div>
+        `).join('');
+      } catch (e) {
+        list.innerHTML = '<div style="color:var(--color-danger);font-size:0.8125rem;">Error: ' + e.message + '</div>';
+      }
     }
 
     // ════════════════════════════════════════

@@ -7,12 +7,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
+  <!-- Quill Rich Text Editor -->
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
 
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
         <img src="/static/images/logo.webp" alt="FlowTier">
         <div class="app-label">Lead Management</div>
@@ -31,12 +34,17 @@
 
       <!-- Header -->
       <div class="detail-header">
-        <div>
-          <div class="detail-title" id="leadName">Loading...</div>
-          <div class="detail-company" id="leadCompany"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">&#9776;</button>
+          <div>
+            <div class="detail-title" id="leadName">Loading...</div>
+            <div class="detail-company" id="leadCompany"></div>
+          </div>
         </div>
         <div class="header-actions">
+          <span class="score-badge" id="leadScoreBadge" style="font-size:0.8125rem;padding:5px 14px;">0</span>
           <select class="filter-select" id="stageSelect" style="font-weight:600;"></select>
+          <a href="#" class="btn btn-secondary btn-sm" id="proposalBtn" title="Create Proposal">&#128196; Create Proposal</a>
           <a href="#" class="btn btn-secondary btn-sm" id="editBtn">&#9998; Edit</a>
           <button class="btn btn-danger btn-sm" id="deleteBtn">&#128465; Delete</button>
         </div>
@@ -65,16 +73,31 @@
             <div id="enrichmentData" style="font-size:0.8125rem;color:var(--color-text-secondary);line-height:1.7;white-space:pre-wrap;"></div>
           </div>
 
+          <!-- Outreach Tracking -->
+          <div class="detail-card">
+            <h3>
+              Outreach History
+              <button class="btn btn-primary btn-sm" onclick="openOutreachModal()">&#43; Log Outreach</button>
+            </h3>
+            <div id="outreachList" class="outreach-list"></div>
+          </div>
+
           <!-- Calendar Event -->
           <div class="detail-card" id="calendarSection" style="display:none;">
             <h3>Scheduled Call</h3>
             <div id="calendarContent"></div>
           </div>
 
-          <!-- Proposal Link -->
-          <div class="detail-card" id="proposalSection" style="display:none;">
-            <h3>Proposal</h3>
-            <div id="proposalContent"></div>
+          <!-- File Attachments -->
+          <div class="detail-card">
+            <h3>
+              Attachments
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                &#43; Upload
+                <input type="file" id="fileUploadInput" style="display:none;" multiple>
+              </label>
+            </h3>
+            <div id="attachmentList" class="attachment-list"></div>
           </div>
 
         </div>
@@ -88,22 +111,19 @@
             <div id="overviewInfo"></div>
           </div>
 
-          <!-- Notes -->
+          <!-- Proposal Link -->
+          <div class="detail-card" id="proposalSection" style="display:none;">
+            <h3>Proposal</h3>
+            <div id="proposalContent"></div>
+          </div>
+
+          <!-- Notes (icon list) -->
           <div class="detail-card">
-            <h3>Notes &amp; Snapshots</h3>
-            <div class="note-input-area">
-              <textarea id="noteInput" placeholder="Write a note, call snapshot, or observation..."></textarea>
-            </div>
-            <div style="display:flex;gap:8px;margin-bottom:16px;">
-              <select class="filter-select" id="noteType" style="padding:6px 10px;font-size:0.75rem;">
-                <option value="note">Note</option>
-                <option value="call_snapshot">Call Snapshot</option>
-                <option value="follow_up">Follow-up</option>
-                <option value="research">Research</option>
-              </select>
-              <button class="btn btn-primary btn-sm" id="addNoteBtn">Add Note</button>
-            </div>
-            <div id="notesList"></div>
+            <h3>
+              Notes &amp; Snapshots
+              <button class="btn btn-primary btn-sm" onclick="openNoteModal()">&#43; New Note</button>
+            </h3>
+            <div id="notesList" class="notes-list"></div>
           </div>
 
           <!-- Activity Timeline -->
@@ -118,18 +138,173 @@
     </main>
   </div>
 
+  <!-- NOTE MODAL -->
+  <div class="modal-overlay" id="noteModal">
+    <div class="modal" style="max-width:700px;">
+      <div class="modal-header">
+        <h2 id="noteModalTitle">New Note</h2>
+        <button class="modal-close" onclick="closeNoteModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label>Title</label>
+            <input type="text" id="noteTitleInput" placeholder="Note title (optional)">
+          </div>
+          <div class="form-group" style="width:160px;margin-bottom:0;">
+            <label>Type</label>
+            <select id="noteTypeSelect">
+              <option value="note">Note</option>
+              <option value="call_snapshot">Call Snapshot</option>
+              <option value="follow_up">Follow-up</option>
+              <option value="research">Research</option>
+            </select>
+          </div>
+        </div>
+        <div class="editor-container">
+          <div id="noteEditor"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeNoteModal()">Cancel</button>
+        <button class="btn btn-primary" id="saveNoteBtn" onclick="saveNote()">Save Note</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTE VIEW MODAL -->
+  <div class="modal-overlay" id="noteViewModal">
+    <div class="modal" style="max-width:700px;">
+      <div class="modal-header">
+        <h2 id="noteViewTitle">Note</h2>
+        <button class="modal-close" onclick="closeNoteViewModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="noteViewContent" style="line-height:1.7;color:var(--color-text-secondary);"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm" id="noteViewDeleteBtn">Delete</button>
+        <button class="btn btn-secondary" id="noteViewEditBtn">Edit</button>
+        <button class="btn btn-primary" onclick="closeNoteViewModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OUTREACH MODAL -->
+  <div class="modal-overlay" id="outreachModal">
+    <div class="modal" style="max-width:600px;">
+      <div class="modal-header">
+        <h2>Log Outreach</h2>
+        <button class="modal-close" onclick="closeOutreachModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+          <div class="form-group" style="width:140px;margin-bottom:0;">
+            <label>Direction</label>
+            <select id="outreachDirection">
+              <option value="sent">Sent</option>
+              <option value="received">Received</option>
+            </select>
+          </div>
+          <div class="form-group" style="width:140px;margin-bottom:0;">
+            <label>Channel</label>
+            <select id="outreachChannel">
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+              <option value="call">Call</option>
+              <option value="instagram">Instagram</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Subject</label>
+          <input type="text" id="outreachSubject" placeholder="Email subject or message topic">
+        </div>
+        <div class="form-group">
+          <label>Body / Content</label>
+          <textarea id="outreachBody" rows="8" placeholder="Paste the email content or describe the interaction..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeOutreachModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveOutreach()">Log Outreach</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OUTREACH VIEW MODAL -->
+  <div class="modal-overlay" id="outreachViewModal">
+    <div class="modal" style="max-width:600px;">
+      <div class="modal-header">
+        <h2 id="outreachViewTitle">Outreach</h2>
+        <button class="modal-close" onclick="closeOutreachViewModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="outreachViewContent" style="line-height:1.7;white-space:pre-wrap;color:var(--color-text-secondary);"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger btn-sm" id="outreachViewDeleteBtn">Delete</button>
+        <button class="btn btn-primary" onclick="closeOutreachViewModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script>
     const leadId = window.location.pathname.split('/').pop();
     let lead = null;
     let stages = [];
+    let quillEditor = null;
+    let editingNoteId = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
       stages = (await fetch('/api/stages').then(r => r.json())).stages;
       await loadLead();
       setupEvents();
+      initQuillEditor();
+      setupKeyboardShortcuts();
     });
+
+    function initQuillEditor() {
+      quillEditor = new Quill('#noteEditor', {
+        theme: 'snow',
+        placeholder: 'Write your note here...',
+        modules: {
+          toolbar: {
+            container: [
+              [{ 'header': [1, 2, 3, false] }],
+              ['bold', 'italic', 'underline', 'strike'],
+              [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+              ['blockquote', 'code-block'],
+              ['link', 'image'],
+              ['clean']
+            ],
+            handlers: {
+              image: function() {
+                const input = document.createElement('input');
+                input.setAttribute('type', 'file');
+                input.setAttribute('accept', 'image/*');
+                input.click();
+                input.onchange = async () => {
+                  const file = input.files[0];
+                  if (!file) return;
+                  const formData = new FormData();
+                  formData.append('image', file);
+                  const res = await fetch('/api/upload/image', { method: 'POST', body: formData });
+                  const data = await res.json();
+                  if (data.url) {
+                    const range = quillEditor.getSelection(true);
+                    quillEditor.insertEmbed(range.index, 'image', data.url);
+                  }
+                };
+              }
+            }
+          }
+        }
+      });
+    }
 
     async function loadLead() {
       const res = await fetch('/api/leads/' + leadId);
@@ -147,6 +322,24 @@
       document.getElementById('leadCompany').textContent = lead.company_name || '';
       document.getElementById('editBtn').href = '/edit/' + lead.id;
 
+      // Lead score badge
+      const score = lead.lead_score || 0;
+      const scoreClass = score >= 60 ? 'high' : score >= 30 ? 'medium' : 'low';
+      const scoreBadge = document.getElementById('leadScoreBadge');
+      scoreBadge.textContent = 'Score: ' + score;
+      scoreBadge.className = 'score-badge ' + scoreClass;
+
+      // Proposal button
+      const proposalBtn = document.getElementById('proposalBtn');
+      const proposalBase = 'https://proposals.flowtier.io/builder';
+      const params = new URLSearchParams();
+      if (lead.contact_name) params.set('client_name', lead.contact_name);
+      if (lead.company_name) params.set('company_name', lead.company_name);
+      if (lead.emails && lead.emails[0]) params.set('client_email', lead.emails[0]);
+      if (lead.phones && lead.phones[0]) params.set('client_phone', lead.phones[0]);
+      proposalBtn.href = proposalBase + '?' + params.toString();
+      proposalBtn.target = '_blank';
+
       // Stage select
       const stageSelect = document.getElementById('stageSelect');
       stageSelect.innerHTML = stages.map(s =>
@@ -154,6 +347,7 @@
       ).join('');
 
       // Contact info
+      const websiteUrl = lead.website ? (lead.website.startsWith('http') ? lead.website : 'https://' + lead.website) : '';
       document.getElementById('contactInfo').innerHTML = `
         ${infoRow('Name', lead.contact_name)}
         ${infoRow('Email(s)', (lead.emails || []).map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>') || '—')}
@@ -162,24 +356,24 @@
         ${infoRow('Address', lead.address)}
       `;
 
-      // Company info
+      // Company info — website link opens in new tab correctly
       document.getElementById('companyInfo').innerHTML = `
         ${infoRow('Company', lead.company_name)}
         ${infoRow('Industry', lead.industry)}
-        ${infoRow('Website', lead.website ? `<a href="${esc(lead.website)}" target="_blank">${esc(lead.website)}</a>` : '—')}
+        ${infoRow('Website', websiteUrl ? `<a href="${esc(websiteUrl)}" target="_blank">${esc(lead.website)}</a>` : '—')}
         ${infoRow('Size', lead.company_size)}
         ${infoRow('Revenue Est.', lead.revenue_estimate)}
         ${infoRow('Source', lead.lead_source)}
       `;
 
       // Enrichment
-      const enrichEl = document.getElementById('enrichmentData');
-      enrichEl.textContent = lead.details || 'No enrichment data yet.';
+      document.getElementById('enrichmentData').textContent = lead.details || 'No enrichment data yet.';
 
       // Overview
       const stage = stages.find(s => s.id === lead.stage) || { label: lead.stage, color: '#78909C' };
       document.getElementById('overviewInfo').innerHTML = `
         ${infoRow('Stage', `<span class="stage-badge" style="background:${stage.color}20;color:${stage.color};">${stage.label}</span>`)}
+        ${infoRow('Lead Score', `<span class="score-badge ${scoreClass}">${score}</span>`)}
         ${infoRow('Deal Value', lead.deal_value ? '$' + Number(lead.deal_value).toLocaleString() : '—')}
         ${infoRow('Tags', (lead.tags || []).map(t => `<span class="tag-chip">${esc(t)}</span>`).join(' ') || '—')}
         ${infoRow('Assigned To', lead.assigned_to || '—')}
@@ -212,33 +406,243 @@
         `;
       }
 
-      // Notes
       renderNotes();
-
-      // Activity
+      renderOutreach();
+      renderAttachments();
       renderActivity();
     }
 
+    // ════════════════════════════════════════
+    // NOTES (Icon List + Modal)
+    // ════════════════════════════════════════
     function renderNotes() {
       const list = document.getElementById('notesList');
       if (!lead.notes || lead.notes.length === 0) {
-        list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;padding:12px 0;">No notes yet. Add your first note above.</div>';
+        list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;padding:12px 0;">No notes yet. Click "+ New Note" to add one.</div>';
         return;
       }
-      list.innerHTML = lead.notes.map(n => `
-        <div class="note-item">
-          <div class="note-meta">
-            <span class="note-type">${esc(n.type || 'note')}</span>
-            <div>
-              <span class="note-time">${formatDate(n.created_at)}</span>
-              <button class="note-delete" onclick="deleteNote('${n.id}')" title="Delete">&#10005;</button>
+
+      const typeIcons = { note: '&#128221;', call_snapshot: '&#128222;', follow_up: '&#128340;', research: '&#128270;' };
+      const typeLabels = { note: 'Note', call_snapshot: 'Call Snapshot', follow_up: 'Follow-up', research: 'Research' };
+
+      list.innerHTML = lead.notes.map(n => {
+        const plainText = (n.content || '').replace(/<[^>]*>/g, '');
+        const title = n.title || plainText.substring(0, 60) || 'Untitled';
+        return `
+          <div class="note-row" onclick="viewNote('${n.id}')">
+            <div class="note-row-icon ${n.type || 'note'}">${typeIcons[n.type] || typeIcons.note}</div>
+            <div class="note-row-info">
+              <div class="note-row-title">${esc(title)}</div>
+              <div class="note-row-meta">${typeLabels[n.type] || 'Note'} &middot; ${formatDate(n.created_at)}</div>
             </div>
           </div>
-          <div class="note-content">${esc(n.content)}</div>
+        `;
+      }).join('');
+    }
+
+    function openNoteModal(noteId) {
+      editingNoteId = noteId || null;
+      const modal = document.getElementById('noteModal');
+      modal.classList.add('active');
+
+      if (noteId) {
+        const note = lead.notes.find(n => n.id === noteId);
+        if (note) {
+          document.getElementById('noteModalTitle').textContent = 'Edit Note';
+          document.getElementById('noteTitleInput').value = note.title || '';
+          document.getElementById('noteTypeSelect').value = note.type || 'note';
+          quillEditor.root.innerHTML = note.content || '';
+        }
+      } else {
+        document.getElementById('noteModalTitle').textContent = 'New Note';
+        document.getElementById('noteTitleInput').value = '';
+        document.getElementById('noteTypeSelect').value = 'note';
+        quillEditor.root.innerHTML = '';
+      }
+    }
+
+    function closeNoteModal() {
+      document.getElementById('noteModal').classList.remove('active');
+      editingNoteId = null;
+    }
+
+    async function saveNote() {
+      const content = quillEditor.root.innerHTML;
+      const title = document.getElementById('noteTitleInput').value.trim();
+      const type = document.getElementById('noteTypeSelect').value;
+
+      if (!content || content === '<p><br></p>') {
+        showToast('Please write something', 'error');
+        return;
+      }
+
+      if (editingNoteId) {
+        await fetch(`/api/leads/${leadId}/notes/${editingNoteId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, title, type })
+        });
+        showToast('Note updated', 'success');
+      } else {
+        await fetch(`/api/leads/${leadId}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, title, type })
+        });
+        showToast('Note added', 'success');
+      }
+
+      closeNoteModal();
+      await loadLead();
+    }
+
+    function viewNote(noteId) {
+      const note = lead.notes.find(n => n.id === noteId);
+      if (!note) return;
+
+      const typeLabels = { note: 'Note', call_snapshot: 'Call Snapshot', follow_up: 'Follow-up', research: 'Research' };
+      document.getElementById('noteViewTitle').textContent = note.title || typeLabels[note.type] || 'Note';
+      document.getElementById('noteViewContent').innerHTML = note.content || '';
+
+      document.getElementById('noteViewEditBtn').onclick = () => {
+        closeNoteViewModal();
+        openNoteModal(noteId);
+      };
+
+      document.getElementById('noteViewDeleteBtn').onclick = async () => {
+        if (!confirm('Delete this note?')) return;
+        await fetch(`/api/leads/${leadId}/notes/${noteId}`, { method: 'DELETE' });
+        closeNoteViewModal();
+        showToast('Note deleted', 'success');
+        await loadLead();
+      };
+
+      document.getElementById('noteViewModal').classList.add('active');
+    }
+
+    function closeNoteViewModal() {
+      document.getElementById('noteViewModal').classList.remove('active');
+    }
+
+    // ════════════════════════════════════════
+    // OUTREACH
+    // ════════════════════════════════════════
+    function renderOutreach() {
+      const list = document.getElementById('outreachList');
+      if (!lead.outreach || lead.outreach.length === 0) {
+        list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;padding:12px 0;">No outreach logged yet.</div>';
+        return;
+      }
+
+      list.innerHTML = lead.outreach.map(o => `
+        <div class="outreach-item" onclick="viewOutreach('${o.id}')">
+          <div class="outreach-item-header">
+            <span class="outreach-direction ${o.direction}">${o.direction === 'sent' ? '&#8593; Sent' : '&#8595; Received'}</span>
+            <span class="outreach-subject">${esc(o.subject || '(no subject)')}</span>
+            <span class="outreach-time">${o.channel || 'email'} &middot; ${formatDate(o.timestamp)}</span>
+          </div>
         </div>
       `).join('');
     }
 
+    function openOutreachModal() {
+      document.getElementById('outreachModal').classList.add('active');
+      document.getElementById('outreachSubject').value = '';
+      document.getElementById('outreachBody').value = '';
+      document.getElementById('outreachDirection').value = 'sent';
+      document.getElementById('outreachChannel').value = 'email';
+    }
+
+    function closeOutreachModal() {
+      document.getElementById('outreachModal').classList.remove('active');
+    }
+
+    async function saveOutreach() {
+      const direction = document.getElementById('outreachDirection').value;
+      const channel = document.getElementById('outreachChannel').value;
+      const subject = document.getElementById('outreachSubject').value.trim();
+      const body = document.getElementById('outreachBody').value.trim();
+
+      if (!body) { showToast('Please enter the outreach content', 'error'); return; }
+
+      await fetch(`/api/leads/${leadId}/outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction, channel, subject, body })
+      });
+
+      closeOutreachModal();
+      showToast('Outreach logged', 'success');
+      await loadLead();
+    }
+
+    function viewOutreach(outreachId) {
+      const o = lead.outreach.find(x => x.id === outreachId);
+      if (!o) return;
+
+      document.getElementById('outreachViewTitle').textContent =
+        (o.direction === 'sent' ? 'Sent: ' : 'Received: ') + (o.subject || '(no subject)');
+      document.getElementById('outreachViewContent').innerHTML = `
+        <div style="margin-bottom:12px;">
+          <span class="outreach-direction ${o.direction}" style="margin-right:8px;">${o.direction === 'sent' ? '&#8593; Sent' : '&#8595; Received'}</span>
+          <span style="color:var(--color-text-muted);font-size:0.75rem;">${o.channel || 'email'} &middot; ${formatDate(o.timestamp)}</span>
+        </div>
+        ${o.subject ? `<div style="font-weight:600;margin-bottom:8px;">Subject: ${esc(o.subject)}</div>` : ''}
+        <div style="white-space:pre-wrap;">${esc(o.body)}</div>
+      `;
+
+      document.getElementById('outreachViewDeleteBtn').onclick = async () => {
+        if (!confirm('Delete this outreach entry?')) return;
+        await fetch(`/api/leads/${leadId}/outreach/${outreachId}`, { method: 'DELETE' });
+        closeOutreachViewModal();
+        showToast('Outreach deleted', 'success');
+        await loadLead();
+      };
+
+      document.getElementById('outreachViewModal').classList.add('active');
+    }
+
+    function closeOutreachViewModal() {
+      document.getElementById('outreachViewModal').classList.remove('active');
+    }
+
+    // ════════════════════════════════════════
+    // ATTACHMENTS
+    // ════════════════════════════════════════
+    function renderAttachments() {
+      const list = document.getElementById('attachmentList');
+      if (!lead.attachments || lead.attachments.length === 0) {
+        list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">No files attached.</div>';
+        return;
+      }
+
+      const iconMap = { pdf: '&#128196;', doc: '&#128196;', docx: '&#128196;', xls: '&#128202;', xlsx: '&#128202;',
+        jpg: '&#128247;', jpeg: '&#128247;', png: '&#128247;', gif: '&#128247;', webp: '&#128247;',
+        mp4: '&#127909;', mp3: '&#127925;', csv: '&#128202;', txt: '&#128196;' };
+
+      list.innerHTML = lead.attachments.map(a => {
+        const ext = a.filename.split('.').pop().toLowerCase();
+        const icon = iconMap[ext] || '&#128196;';
+        return `
+          <div class="attachment-item">
+            <span class="attachment-icon">${icon}</span>
+            <a href="${a.url}" target="_blank" class="attachment-name" title="${esc(a.filename)}">${esc(a.filename)}</a>
+            <button class="attachment-delete" onclick="deleteAttachment('${a.id}')" title="Delete">&times;</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function deleteAttachment(attId) {
+      if (!confirm('Delete this file?')) return;
+      await fetch(`/api/leads/${leadId}/attachments/${attId}`, { method: 'DELETE' });
+      showToast('File deleted', 'success');
+      await loadLead();
+    }
+
+    // ════════════════════════════════════════
+    // ACTIVITY TIMELINE
+    // ════════════════════════════════════════
     function renderActivity() {
       const timeline = document.getElementById('activityTimeline');
       const activities = (lead.activity || []).slice().reverse();
@@ -273,24 +677,6 @@
         }
       });
 
-      // Add note
-      document.getElementById('addNoteBtn').addEventListener('click', async () => {
-        const content = document.getElementById('noteInput').value.trim();
-        if (!content) return;
-        const type = document.getElementById('noteType').value;
-
-        const res = await fetch('/api/leads/' + leadId + '/notes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content, type })
-        });
-        if (res.ok) {
-          document.getElementById('noteInput').value = '';
-          showToast('Note added', 'success');
-          await loadLead();
-        }
-      });
-
       // Delete lead
       document.getElementById('deleteBtn').addEventListener('click', async () => {
         if (!confirm('Delete this lead permanently?')) return;
@@ -298,19 +684,60 @@
         window.location.href = '/';
       });
 
-      // Ctrl+Enter to add note
-      document.getElementById('noteInput').addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          document.getElementById('addNoteBtn').click();
+      // File upload
+      document.getElementById('fileUploadInput').addEventListener('change', async (e) => {
+        const files = e.target.files;
+        for (let i = 0; i < files.length; i++) {
+          const formData = new FormData();
+          formData.append('file', files[i]);
+          await fetch(`/api/leads/${leadId}/attachments`, { method: 'POST', body: formData });
         }
+        showToast(`${files.length} file(s) uploaded`, 'success');
+        e.target.value = '';
+        await loadLead();
       });
     }
 
-    async function deleteNote(noteId) {
-      if (!confirm('Delete this note?')) return;
-      await fetch(`/api/leads/${leadId}/notes/${noteId}`, { method: 'DELETE' });
-      showToast('Note deleted', 'success');
-      await loadLead();
+    // ════════════════════════════════════════
+    // KEYBOARD SHORTCUTS
+    // ════════════════════════════════════════
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.closest('.ql-editor')) {
+          if (e.key === 'Escape') {
+            e.target.blur();
+            closeNoteModal();
+            closeNoteViewModal();
+            closeOutreachModal();
+            closeOutreachViewModal();
+          }
+          return;
+        }
+
+        switch (e.key) {
+          case 'n':
+          case 'N':
+            e.preventDefault();
+            openNoteModal();
+            break;
+          case 'o':
+          case 'O':
+            e.preventDefault();
+            openOutreachModal();
+            break;
+          case 'e':
+          case 'E':
+            e.preventDefault();
+            window.location.href = '/edit/' + leadId;
+            break;
+          case 'Escape':
+            closeNoteModal();
+            closeNoteViewModal();
+            closeOutreachModal();
+            closeOutreachViewModal();
+            break;
+        }
+      });
     }
 
     // ════════════════════════════════════════
