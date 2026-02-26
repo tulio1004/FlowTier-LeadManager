@@ -37,7 +37,37 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+
+/* ── Custom Dark Scrollbar ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* Firefox scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) rgba(255, 255, 255, 0.03);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
 body {
   font-family: var(--font-sans);
   font-size: 0.875rem;
@@ -62,7 +92,12 @@ a:hover { text-decoration: underline; }
   left: 0;
   bottom: 0;
   z-index: 100;
-  overflow-y: auto;
+  overflow-y: scroll;
+  -ms-overflow-style: none;  /* IE/Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+.sidebar::-webkit-scrollbar {
+  display: none;             /* Chrome/Safari/Opera */
 }
 .main-content {
   flex: 1;
@@ -87,7 +122,7 @@ a:hover { text-decoration: underline; }
   letter-spacing: 0.06em;
 }
 
-.sidebar-nav { padding: 12px 0; flex: 1; overflow-y: auto; }
+.sidebar-nav { padding: 12px 0; flex: 1; overflow-y: visible; overflow-x: hidden; }
 .nav-section-label {
   padding: 16px 20px 6px;
   font-size: 0.625rem;

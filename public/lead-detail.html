@@ -100,9 +100,9 @@
           </div>
 
           <!-- File Attachments -->
-          <div class="detail-card">
+          <div class="detail-card" id="attachmentCard">
             <h3>
-              Attachments
+              Attachments <span id="attachmentCount" style="font-size:0.6875rem;font-weight:600;background:var(--color-primary-dim);color:var(--color-primary);padding:2px 8px;border-radius:10px;margin-left:4px;"></span>
               <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
                 &#43; Upload
                 <input type="file" id="fileUploadInput" style="display:none;" multiple>
@@ -672,10 +672,20 @@
 
     function renderAttachments() {
       const list = document.getElementById('attachmentList');
-      if (!lead.attachments || lead.attachments.length === 0) {
+      const countBadge = document.getElementById('attachmentCount');
+      const card = document.getElementById('attachmentCard');
+      console.log('[FlowTier] renderAttachments called, lead.attachments:', lead.attachments);
+
+      const count = (lead.attachments || []).length;
+      countBadge.textContent = count > 0 ? count : '';
+
+      if (!lead.attachments || count === 0) {
         list.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">No files attached.</div>';
+        card.style.borderColor = '';
         return;
       }
+      // Subtle highlight when files exist
+      card.style.borderColor = 'rgba(0, 230, 118, 0.2)';
 
       const iconMap = { pdf: '&#128196;', doc: '&#128196;', docx: '&#128196;', xls: '&#128202;', xlsx: '&#128202;',
         jpg: '&#128247;', jpeg: '&#128247;', png: '&#128247;', gif: '&#128247;', webp: '&#128247;',
