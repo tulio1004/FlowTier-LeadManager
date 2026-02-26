@@ -559,6 +559,40 @@ app.get('/api/leads/lookup', (req, res) => {
   }
 });
 
+// Public lead search (for Proposal Builder import — limited data, CORS enabled)
+app.get('/api/leads/search', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  const q = (req.query.q || '').trim().toLowerCase();
+  if (q.length < 2) return res.json({ leads: [] });
+
+  try {
+    const allLeads = getAllLeads();
+    const matches = allLeads.filter(l =>
+      (l.company_name || '').toLowerCase().includes(q) ||
+      (l.contact_name || '').toLowerCase().includes(q) ||
+      (l.emails || []).flat(Infinity).some(e => typeof e === 'string' && e.toLowerCase().includes(q))
+    ).slice(0, 20); // Limit to 20 results
+
+    return res.json({
+      leads: matches.map(l => ({
+        lead_id: l.id,
+        contact_name: l.contact_name || '',
+        company_name: l.company_name || '',
+        email: (l.emails || []).flat(Infinity).find(e => typeof e === 'string' && e.includes('@')) || '',
+        phone: (l.phones || []).flat(Infinity).find(p => typeof p === 'string') || '',
+        stage: l.stage || 'cold',
+        industry: l.industry || ''
+      }))
+    });
+  } catch (err) {
+    console.error('[Search] Error:', err.message);
+    return res.json({ leads: [] });
+  }
+});
+
 // List leads
 app.get('/api/leads', requireApiOrSession, (req, res) => {
   try {
