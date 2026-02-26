@@ -308,6 +308,7 @@
           <button class="tab-btn" onclick="switchTab('bulk')">Bulk Actions</button>
           <button class="tab-btn" onclick="switchTab('import')">Import / Export</button>
           <button class="tab-btn" onclick="switchTab('config')">Config</button>
+          <button class="tab-btn" onclick="switchTab('proposals')">Proposals</button>
           <button class="tab-btn" onclick="switchTab('campaigns')">Campaigns</button>
           <button class="tab-btn" onclick="switchTab('conversations')">Conversations</button>
           <button class="tab-btn" onclick="switchTab('blacklist')">Blacklist</button>
@@ -390,6 +391,46 @@ PATCH /api/leads/abc-123
               <span class="endpoint-path">/api/leads/:id</span>
             </div>
             <div class="endpoint-desc">Permanently delete a lead.</div>
+          </div>
+
+          <div class="endpoint-card" style="border-left:3px solid #10b981;">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/leads/lookup?email=...</span>
+            </div>
+            <div class="endpoint-desc"><strong>Public endpoint (no auth required, CORS enabled)</strong> — Look up a lead by email address. Used by the Proposal Builder to auto-link proposals to existing leads. Returns only basic info (no sensitive data).</div>
+            <table class="field-table">
+              <thead><tr><th>Query Param</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>email</code></td><td>string</td><td>Email address to search for (case-insensitive, handles nested arrays)</td></tr>
+              </tbody>
+            </table>
+            <div class="code-block">// Response when found:
+{
+  "found": true,
+  "lead_id": "abc-123-def-456",
+  "contact_name": "Sarah Mitchell",
+  "company_name": "Brightside Dental",
+  "stage": "qualified"
+}
+
+// Response when not found:
+{ "found": false }</div>
+          </div>
+
+          <div class="endpoint-card" style="border-left:3px solid #8b5cf6;">
+            <div class="endpoint-header">
+              <span class="method-badge patch">PATCH</span>
+              <span class="endpoint-path">/api/leads/:id</span>
+              <span style="color:#8b5cf6;font-size:0.75rem;margin-left:8px;">PROPOSAL INTEGRATION</span>
+            </div>
+            <div class="endpoint-desc">Link a proposal URL to a lead. After a proposal is created in the Proposal Builder, Make.com can use the <code>lead_id</code> from the webhook to update the lead with the proposal URL.</div>
+            <div class="code-block">// Make.com scenario: After proposal_created webhook
+PATCH /api/leads/{{lead_id}}
+{
+  "proposal_url": "https://proposals.flowtier.io/brightside-dental",
+  "stage": "proposal_sent"
+}</div>
           </div>
         </div>
 
@@ -643,6 +684,129 @@ Tags, Stage, Assigned To, Deal Value, Details
             </div>
             <div class="endpoint-desc">Set the webhook URL.</div>
             <div class="code-block">{ "url": "https://hook.us2.make.com/your-webhook-id" }</div>
+          </div>
+        </div>
+
+        <!-- PROPOSALS INTEGRATION TAB -->
+        <div class="tab-content" id="tab-proposals">
+          <div style="padding:12px 0 8px;color:var(--color-text-muted);font-size:0.85rem;">
+            <strong style="color:#8b5cf6;">Lead Manager ↔ Proposal Builder Integration</strong><br>
+            The two systems communicate via <code>lead_id</code>. When a proposal is created from a lead, the lead_id is passed to the Proposal Builder and included in all webhook payloads.
+          </div>
+
+          <div class="endpoint-card" style="border-left:3px solid #8b5cf6;">
+            <div class="endpoint-header">
+              <span style="color:#8b5cf6;font-weight:700;">FLOW</span>
+              <span class="endpoint-path">Lead → Proposal → Webhook → Lead Update</span>
+            </div>
+            <div class="endpoint-desc">Complete integration flow between Lead Manager and Proposal Builder:</div>
+            <div class="code-block">1. User clicks "Create Proposal" on a lead profile
+   → Opens proposals.flowtier.io/builder?lead_id=xxx&client_name=...&client_email=...
+
+2. Proposal Builder stores lead_id internally (hidden from client)
+   → lead_id is included in buildJSON() output
+
+3. When proposal is created, webhook fires to Make.com:
+   Event: proposal_created
+   Payload includes: lead_id, proposal_url, client info, pricing
+
+4. Make.com scenario receives webhook and:
+   a) Updates lead stage: PATCH /api/leads/{{lead_id}} { "stage": "proposal_sent", "proposal_url": "..." }
+   b) Sends email notification to client
+   c) Creates follow-up task
+
+5. When proposal is signed, webhook fires:
+   Event: proposal_signed
+   Payload includes: lead_id, signature, payment_link
+
+6. Make.com updates lead: PATCH /api/leads/{{lead_id}} { "stage": "won" }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/leads/lookup?email=...</span>
+            </div>
+            <div class="endpoint-desc"><strong>Public, no auth, CORS enabled.</strong> Auto-matches an email to an existing lead. Used by the Proposal Builder when creating standalone proposals — if you type an email that exists in the CRM, the system auto-links the proposal to that lead.</div>
+            <div class="code-block">// Request:
+GET https://leads.flowtier.io/api/leads/lookup?email=sarah@brightsidedental.com
+
+// Response (found):
+{
+  "found": true,
+  "lead_id": "abc-123-def-456",
+  "contact_name": "Sarah Mitchell",
+  "company_name": "Brightside Dental",
+  "stage": "qualified"
+}
+
+// Response (not found):
+{ "found": false }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span style="color:#f59e0b;font-weight:700;">WEBHOOK</span>
+              <span class="endpoint-path">proposal_created / proposal_updated / proposal_signed</span>
+            </div>
+            <div class="endpoint-desc">All proposal webhook payloads now include <code>lead_id</code> when the proposal was created from a lead or auto-matched by email.</div>
+            <div class="code-block">// proposal_created webhook payload:
+{
+  "event": "proposal_created",
+  "proposal_url": "https://proposals.flowtier.io/brightside-dental",
+  "slug": "brightside-dental",
+  "proposal_id": "PROP-001",
+  "lead_id": "abc-123-def-456",   // ← NEW: Use this to update the lead
+  "client": {
+    "name": "Sarah Mitchell",
+    "company": "Brightside Dental",
+    "email": "sarah@brightsidedental.com",
+    "phone": "+1 555-123-4567"
+  },
+  "project_name": "AI Voice Assistant",
+  "pricing": {
+    "currency": "usd",
+    "due_now_cents": 150000,
+    "total_setup_cents": 250000,
+    "total_monthly_cents": 49900
+  },
+  "created_date": "2026-02-26"
+}
+
+// proposal_signed webhook payload:
+{
+  "event": "proposal_signed",
+  "proposal_url": "https://proposals.flowtier.io/brightside-dental",
+  "slug": "brightside-dental",
+  "proposal_id": "PROP-001",
+  "lead_id": "abc-123-def-456",   // ← NEW
+  "client": { ... },
+  "signature": { "name": "Sarah Mitchell", "date": "2026-02-26T..." },
+  "payment_link": "https://checkout.stripe.com/...",
+  "amount_due": { "cents": 150000, "formatted": "$1500.00", "currency": "USD" }
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span style="color:#10b981;font-weight:700;">MAKE.COM</span>
+              <span class="endpoint-path">Recommended Scenario</span>
+            </div>
+            <div class="endpoint-desc">After receiving a <code>proposal_created</code> webhook, create a Make.com scenario that updates the lead:</div>
+            <div class="code-block">// Make.com HTTP Module:
+Method: PATCH
+URL: https://leads.flowtier.io/api/leads/{{lead_id}}
+Headers: { "Content-Type": "application/json" }
+Body:
+{
+  "proposal_url": "{{proposal_url}}",
+  "stage": "proposal_sent"
+}
+
+// This will:
+// 1. Store the proposal URL on the lead profile
+// 2. Move the lead to "Proposal Sent" stage
+// 3. The proposal will appear on the lead's detail page</div>
           </div>
         </div>
 

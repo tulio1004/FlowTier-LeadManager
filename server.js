@@ -523,6 +523,42 @@ app.get('/api/sources', (req, res) => {
 // API: LEADS CRUD
 // ============================================
 
+// Public lead lookup by email (for Proposal Builder cross-origin matching)
+// Returns only lead_id and basic info — no sensitive data exposed
+app.get('/api/leads/lookup', (req, res) => {
+  // Allow cross-origin from proposal builder
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  const email = (req.query.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    return res.json({ found: false });
+  }
+
+  try {
+    const leads = getAllLeads();
+    const match = leads.find(l => {
+      const emails = (l.emails || []).flat(Infinity).map(e => typeof e === 'string' ? e.toLowerCase() : '');
+      return emails.includes(email);
+    });
+
+    if (match) {
+      return res.json({
+        found: true,
+        lead_id: match.id,
+        contact_name: match.contact_name || '',
+        company_name: match.company_name || '',
+        stage: match.stage || ''
+      });
+    }
+    return res.json({ found: false });
+  } catch (err) {
+    console.error('[Lookup] Error:', err.message);
+    return res.json({ found: false });
+  }
+});
+
 // List leads
 app.get('/api/leads', requireApiOrSession, (req, res) => {
   try {

@@ -159,9 +159,19 @@
           </div>
 
           <!-- Proposal Link -->
-          <div class="detail-card" id="proposalSection" style="display:none;">
-            <h3>Proposal</h3>
-            <div id="proposalContent"></div>
+          <div class="detail-card" id="proposalSection">
+            <h3>
+              Proposal
+              <button class="btn btn-secondary btn-sm" id="linkProposalBtn" onclick="toggleProposalLink()" style="font-size:0.7rem;">&#128279; Link Proposal</button>
+            </h3>
+            <div id="proposalContent"><div style="color:var(--color-text-muted);font-size:0.8125rem;">No proposal linked yet. Click "Create Proposal" above or link one manually.</div></div>
+            <div id="proposalLinkForm" style="display:none;margin-top:10px;">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="url" id="proposalUrlInput" class="form-control" placeholder="https://proposals.flowtier.io/company-name" style="flex:1;font-size:0.8rem;padding:6px 10px;">
+                <button class="btn btn-primary btn-sm" onclick="saveProposalUrl()">Save</button>
+                <button class="btn btn-secondary btn-sm" onclick="toggleProposalLink()">Cancel</button>
+              </div>
+            </div>
           </div>
 
           <!-- Notes (icon list) -->
@@ -382,6 +392,7 @@
       const params = new URLSearchParams();
       const flatEmails = (lead.emails || []).flat(Infinity).filter(e => typeof e === 'string' && e.includes('@'));
       const flatPhones = (lead.phones || []).flat(Infinity).filter(p => typeof p === 'string' && p.length > 0);
+      params.set('lead_id', leadId);
       if (lead.contact_name) params.set('client_name', lead.contact_name);
       if (lead.company_name) params.set('company_name', lead.company_name);
       if (flatEmails[0]) params.set('client_email', flatEmails[0]);
@@ -441,12 +452,7 @@
       renderCalendar();
 
       // Proposal
-      if (lead.proposal_url) {
-        document.getElementById('proposalSection').style.display = 'block';
-        document.getElementById('proposalContent').innerHTML = `
-          <a href="${esc(lead.proposal_url)}" target="_blank" class="btn btn-secondary btn-sm">&#128196; View Proposal</a>
-        `;
-      }
+      renderProposal();
 
       renderNotes();
       renderOutreach();
@@ -869,6 +875,63 @@
       const days = Math.floor(hrs / 24);
       if (days < 30) return days + 'd ago';
       return new Date(dateStr).toLocaleDateString();
+    }
+
+    // ════════════════════════════════════════
+    // PROPOSAL MANAGEMENT
+    // ════════════════════════════════════════
+    function renderProposal() {
+      const content = document.getElementById('proposalContent');
+      const linkBtn = document.getElementById('linkProposalBtn');
+
+      if (lead.proposal_url) {
+        const url = esc(lead.proposal_url);
+        const slug = lead.proposal_url.split('/').pop();
+        content.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <a href="${url}" target="_blank" class="btn btn-primary btn-sm" style="font-size:0.8rem;">&#128196; View Proposal</a>
+            <a href="https://proposals.flowtier.io/builder?edit=${esc(slug)}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:0.75rem;">&#9998; Edit in Builder</a>
+            <span style="color:var(--color-text-muted);font-size:0.75rem;">${url}</span>
+          </div>
+        `;
+        linkBtn.textContent = '\u270E Change';
+      } else {
+        content.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">No proposal linked yet. Click "Create Proposal" above or link one manually.</div>';
+        linkBtn.textContent = '\uD83D\uDD17 Link Proposal';
+      }
+    }
+
+    function toggleProposalLink() {
+      const form = document.getElementById('proposalLinkForm');
+      const isHidden = form.style.display === 'none';
+      form.style.display = isHidden ? 'block' : 'none';
+      if (isHidden && lead.proposal_url) {
+        document.getElementById('proposalUrlInput').value = lead.proposal_url;
+      }
+    }
+
+    async function saveProposalUrl() {
+      const url = document.getElementById('proposalUrlInput').value.trim();
+      if (!url) { showToast('Please enter a proposal URL', 'error'); return; }
+
+      try {
+        const res = await fetch(`/api/leads/${leadId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proposal_url: url })
+        });
+        const data = await res.json();
+        if (data.success !== false) {
+          lead.proposal_url = url;
+          renderProposal();
+          document.getElementById('proposalLinkForm').style.display = 'none';
+          showToast('Proposal linked');
+        } else {
+          showToast(data.error || 'Failed to save', 'error');
+        }
+      } catch (err) {
+        showToast('Error saving proposal URL', 'error');
+      }
     }
 
     // ════════════════════════════════════════

@@ -376,3 +376,81 @@ To provide full context to the AI agent and manage unsubscribes, two additional 
 - `GET /api/blacklist`: Retrieves the list of all blacklisted email addresses.
 - `POST /api/blacklist`: Adds a new email to the global blacklist.
 - `DELETE /api/blacklist/:email`: Removes an email from the blacklist.
+
+## 9. Proposal Builder Integration
+
+This section details the integration between the FlowTier Lead Management System and the standalone Proposal Builder application (`proposals.flowtier.io`). The integration ensures a seamless workflow from lead management to proposal creation, tracking, and back again.
+
+### 9.1. Integration Architecture & Flow
+
+The two systems are connected via a combination of URL query parameters and API endpoints. The `lead_id` is the primary key that links a proposal to a lead.
+
+1.  **Lead to Proposal (User-Initiated):**
+    *   A user clicks the **"Create Proposal"** button on a lead's detail page in the Lead Manager.
+    *   This action opens the Proposal Builder in a new tab with pre-filled data. The URL includes the `lead_id` as a query parameter: `https://proposals.flowtier.io/builder?lead_id=...&client_name=...&client_email=...`
+
+2.  **Proposal Builder (Lead Linking):**
+    *   The Proposal Builder captures the `lead_id` from the URL and stores it internally. This ID is not visible to the end client viewing the proposal.
+    *   **Auto-Matching:** If a proposal is created *without* a `lead_id` in the URL (i.e., a standalone proposal), the builder will automatically attempt to match the client's email address to an existing lead. It does this by calling a public `GET /api/leads/lookup?email=...` endpoint on the Lead Manager. If a match is found, it links the proposal to that lead.
+
+3.  **Webhook (`proposal_created`):**
+    *   When the proposal is created or updated, the Proposal Builder fires a webhook (`proposal_created` or `proposal_updated`) to your configured Make.com URL.
+    *   Crucially, this webhook payload now includes the `lead_id` if one was linked.
+
+4.  **Make.com (Lead Update):**
+    *   A Make.com scenario is triggered by the proposal webhook.
+    *   It uses the `lead_id` from the payload to make a `PATCH` request back to the Lead Manager API.
+    *   This request updates the lead with the `proposal_url` and can also change the lead's stage (e.g., to "Proposal Sent").
+
+5.  **Lead Manager (Display Proposal):**
+    *   Once the `proposal_url` is saved on the lead, the lead's detail page will display a "View Proposal" button, providing a direct link to the live proposal.
+
+### 9.2. Integration Endpoints
+
+#### Lead Manager API
+
+-   `GET /api/leads/lookup?email=...`
+    -   **Public Endpoint (No Auth, CORS Enabled):** Allows the Proposal Builder to look up a lead by email from a different domain.
+    -   **Returns:** A JSON object with `found: true` and basic lead info (`lead_id`, `contact_name`, `company_name`) if a match is found, or `found: false` otherwise. No sensitive data is exposed.
+
+-   `PATCH /api/leads/:id`
+    -   Used by Make.com to update a lead after a proposal event. The key is to send the `proposal_url` from the webhook payload to this endpoint.
+
+#### Proposal Builder Webhooks
+
+All webhook events fired from the Proposal Builder (`proposal_created`, `proposal_updated`, `proposal_signed`) will now include a `lead_id` field in their payload if the proposal is linked to a lead.
+
+**Example `proposal_created` Payload with `lead_id`:**
+
+```json
+{
+  "event": "proposal_created",
+  "proposal_url": "https://proposals.flowtier.io/example-corp",
+  "slug": "example-corp",
+  "lead_id": "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6",
+  "client": {
+    "name": "John Doe",
+    "company": "Example Corp",
+    "email": "john@example.com"
+  }
+}
+```
+
+### 9.3. Recommended Make.com Scenario
+
+To automate the loop, create a Make.com scenario with the following steps:
+
+1.  **Trigger:** Custom Webhook (listening for events from the Proposal Builder).
+2.  **Action:** HTTP - Make a Request.
+    -   **Method:** `PATCH`
+    -   **URL:** `https://leads.flowtier.io/api/leads/{{2.lead_id}}` (Map `lead_id` from the webhook trigger).
+    -   **Headers:** `Content-Type: application/json`
+    -   **Body:**
+        ```json
+        {
+          "proposal_url": "{{2.proposal_url}}",
+          "stage": "proposal_sent"
+        }
+        ```
+
+This setup ensures that as soon as a proposal is created for a lead, the lead's record in the CRM is instantly updated with a link to that proposal and moved to the correct stage in the pipeline.
