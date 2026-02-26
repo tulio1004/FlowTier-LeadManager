@@ -497,16 +497,31 @@ PATCH /api/leads/abc-123
               <span class="method-badge post">POST</span>
               <span class="endpoint-path">/api/leads/:id/calendar</span>
             </div>
-            <div class="endpoint-desc">Attach a calendar event to a lead. Use this from Make.com when a Google Calendar event is created.</div>
+            <div class="endpoint-desc">Attach a calendar event to a lead. Use this from Make.com when a Google Calendar event is created, or add events manually from the lead profile.</div>
             <div class="code-block">{
   "event_id": "abc123xyz",
   "title": "Discovery Call with Brightside Dental",
+  "event_date": "2026-03-01",
   "start_time": "2026-03-01T14:00:00Z",
   "end_time": "2026-03-01T14:30:00Z",
   "meet_link": "https://meet.google.com/abc-defg-hij",
   "description": "Discuss AI chatbot implementation",
   "attendees": ["sarah@brightsidedental.com", "tulio@flowtier.io"]
 }</div>
+            <table class="schema-table" style="margin-top:12px;">
+              <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>event_id</code></td><td>string</td><td>Google Calendar event ID (optional, used for "View in Calendar" link)</td></tr>
+                <tr><td><code>title</code></td><td>string</td><td>Event title. Defaults to "Call with [contact name]" if empty</td></tr>
+                <tr><td><code>event_date</code></td><td>string</td><td><strong>Event date</strong> in YYYY-MM-DD format (e.g., "2026-03-01")</td></tr>
+                <tr><td><code>start_time</code></td><td>string</td><td>Start time as ISO datetime or HH:MM</td></tr>
+                <tr><td><code>end_time</code></td><td>string</td><td>End time as ISO datetime or HH:MM</td></tr>
+                <tr><td><code>meet_link</code></td><td>string</td><td>Google Meet / Zoom / video call URL</td></tr>
+                <tr><td><code>description</code></td><td>string</td><td>Event description or agenda</td></tr>
+                <tr><td><code>attendees</code></td><td>string[]</td><td>Array of attendee email addresses</td></tr>
+              </tbody>
+            </table>
+            <div class="endpoint-desc" style="margin-top:12px;"><strong>Side effects:</strong> Auto-changes stage to "Call Booked" if lead is Cold/Contacted/Qualified. Fires <code>lead_call_booked</code> webhook.</div>
           </div>
         </div>
 
@@ -984,12 +999,14 @@ Body:
 {
   "event_id": "{{google_event_id}}",
   "title": "{{event_title}}",
+  "event_date": "{{event_date}}",
   "start_time": "{{start_time}}",
   "end_time": "{{end_time}}",
   "meet_link": "{{hangout_link}}",
   "description": "{{event_description}}",
   "attendees": ["{{attendee_email}}"]
 }</div>
+          <div class="endpoint-desc" style="margin-top:8px;"><strong>Note:</strong> <code>event_date</code> should be in YYYY-MM-DD format (e.g., "2026-03-01"). You can also add events manually from the lead profile page using the "+ Add Event" button.</div>
         </div>
       </div>
 
@@ -1038,6 +1055,7 @@ Body:
         calendar_event: {
           event_id: 'gcal_abc123xyz',
           title: 'Discovery Call with Brightside Dental',
+          event_date: '2026-03-01',
           start_time: '2026-03-01T14:00:00Z',
           end_time: '2026-03-01T14:30:00Z',
           meet_link: 'https://meet.google.com/abc-defg-hij',

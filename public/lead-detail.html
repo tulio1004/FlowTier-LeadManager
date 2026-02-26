@@ -94,9 +94,45 @@
           </div>
 
           <!-- Calendar Event -->
-          <div class="detail-card" id="calendarSection" style="display:none;">
-            <h3>Scheduled Call</h3>
-            <div id="calendarContent"></div>
+          <div class="detail-card" id="calendarSection">
+            <h3>
+              Scheduled Call
+              <button class="btn btn-secondary btn-sm" id="addEventBtn" onclick="toggleEventForm()" style="font-size:0.7rem;">&#43; Add Event</button>
+            </h3>
+            <div id="calendarContent"><div style="color:var(--color-text-muted);font-size:0.8125rem;">No event scheduled.</div></div>
+            <div id="eventForm" style="display:none;margin-top:12px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div>
+                  <label style="font-size:0.6875rem;color:var(--color-text-muted);display:block;margin-bottom:2px;">Title</label>
+                  <input type="text" id="evTitle" class="form-control" placeholder="Discovery Call" style="font-size:0.8rem;padding:6px 10px;">
+                </div>
+                <div>
+                  <label style="font-size:0.6875rem;color:var(--color-text-muted);display:block;margin-bottom:2px;">Event Date</label>
+                  <input type="date" id="evDate" class="form-control" style="font-size:0.8rem;padding:6px 10px;">
+                </div>
+                <div>
+                  <label style="font-size:0.6875rem;color:var(--color-text-muted);display:block;margin-bottom:2px;">Start Time</label>
+                  <input type="time" id="evStartTime" class="form-control" style="font-size:0.8rem;padding:6px 10px;">
+                </div>
+                <div>
+                  <label style="font-size:0.6875rem;color:var(--color-text-muted);display:block;margin-bottom:2px;">End Time</label>
+                  <input type="time" id="evEndTime" class="form-control" style="font-size:0.8rem;padding:6px 10px;">
+                </div>
+                <div style="grid-column:1/-1;">
+                  <label style="font-size:0.6875rem;color:var(--color-text-muted);display:block;margin-bottom:2px;">Google Meet Link</label>
+                  <input type="url" id="evMeetLink" class="form-control" placeholder="https://meet.google.com/abc-defg-hij" style="font-size:0.8rem;padding:6px 10px;">
+                </div>
+                <div style="grid-column:1/-1;">
+                  <label style="font-size:0.6875rem;color:var(--color-text-muted);display:block;margin-bottom:2px;">Description</label>
+                  <textarea id="evDescription" class="form-control" rows="2" placeholder="Meeting notes..." style="font-size:0.8rem;padding:6px 10px;"></textarea>
+                </div>
+              </div>
+              <div style="margin-top:10px;display:flex;gap:8px;">
+                <button class="btn btn-primary btn-sm" onclick="saveEvent()">Save Event</button>
+                <button class="btn btn-secondary btn-sm" onclick="toggleEventForm()">Cancel</button>
+                <button class="btn btn-sm" id="deleteEventBtn" onclick="deleteEvent()" style="background:var(--color-danger);color:#fff;display:none;">Delete Event</button>
+              </div>
+            </div>
           </div>
 
           <!-- File Attachments -->
@@ -402,20 +438,7 @@
       `;
 
       // Calendar
-      if (lead.calendar_event && lead.calendar_event.title) {
-        document.getElementById('calendarSection').style.display = 'block';
-        const cal = lead.calendar_event;
-        document.getElementById('calendarContent').innerHTML = `
-          <div class="calendar-card">
-            <div class="cal-title">${esc(cal.title)}</div>
-            ${cal.start_time ? `<div class="cal-detail">&#128197; ${formatDate(cal.start_time)}${cal.end_time ? ' — ' + formatDate(cal.end_time) : ''}</div>` : ''}
-            ${cal.description ? `<div class="cal-detail" style="margin-top:6px;">${esc(cal.description)}</div>` : ''}
-            ${cal.attendees && cal.attendees.length ? `<div class="cal-detail">&#128101; ${cal.attendees.map(a => esc(a)).join(', ')}</div>` : ''}
-            ${cal.meet_link ? `<a href="${esc(cal.meet_link)}" target="_blank" class="cal-link">&#127760; Join Meeting</a>` : ''}
-            ${cal.event_id ? `<a href="https://calendar.google.com/calendar/event?eid=${esc(cal.event_id)}" target="_blank" class="cal-link" style="margin-left:12px;">&#128197; View in Google Calendar</a>` : ''}
-          </div>
-        `;
-      }
+      renderCalendar();
 
       // Proposal
       if (lead.proposal_url) {
@@ -848,13 +871,154 @@
       return new Date(dateStr).toLocaleDateString();
     }
 
-    function showToast(msg, type) {
+    // ════════════════════════════════════════
+    // CALENDAR EVENT MANAGEMENT
+    // ════════════════════════════════════════
+    function renderCalendar() {
+      const content = document.getElementById('calendarContent');
+      const addBtn = document.getElementById('addEventBtn');
+      const deleteBtn = document.getElementById('deleteEventBtn');
+
+      if (lead.calendar_event && lead.calendar_event.title) {
+        const cal = lead.calendar_event;
+        const dateStr = cal.event_date ? formatDate(cal.event_date + (cal.start_time && !cal.start_time.includes('T') ? 'T' + cal.start_time : '')) : (cal.start_time ? formatDate(cal.start_time) : '');
+        const endStr = cal.end_time ? (cal.end_time.includes('T') ? formatDate(cal.end_time) : cal.end_time) : '';
+        content.innerHTML = `
+          <div class="calendar-card">
+            <div class="cal-title">${esc(cal.title)}</div>
+            ${cal.event_date ? `<div class="cal-detail">&#128197; <strong>Date:</strong> ${formatDate(cal.event_date)}</div>` : ''}
+            ${cal.start_time ? `<div class="cal-detail">&#128336; <strong>Time:</strong> ${dateStr}${endStr ? ' — ' + endStr : ''}</div>` : ''}
+            ${cal.description ? `<div class="cal-detail" style="margin-top:6px;">${esc(cal.description)}</div>` : ''}
+            ${cal.attendees && cal.attendees.length ? `<div class="cal-detail">&#128101; ${cal.attendees.map(a => esc(a)).join(', ')}</div>` : ''}
+            ${cal.meet_link ? `<a href="${esc(cal.meet_link)}" target="_blank" class="cal-link">&#127760; Join Meeting</a>` : ''}
+            ${cal.event_id ? `<a href="https://calendar.google.com/calendar/event?eid=${esc(cal.event_id)}" target="_blank" class="cal-link" style="margin-left:12px;">&#128197; View in Google Calendar</a>` : ''}
+          </div>
+        `;
+        addBtn.textContent = '\u270E Edit';
+        deleteBtn.style.display = '';
+      } else {
+        content.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">No event scheduled.</div>';
+        addBtn.textContent = '+ Add Event';
+        deleteBtn.style.display = 'none';
+      }
+    }
+
+    function toggleEventForm() {
+      const form = document.getElementById('eventForm');
+      const isHidden = form.style.display === 'none';
+      form.style.display = isHidden ? 'block' : 'none';
+
+      if (isHidden && lead.calendar_event && lead.calendar_event.title) {
+        // Pre-fill form with existing event data
+        const cal = lead.calendar_event;
+        document.getElementById('evTitle').value = cal.title || '';
+        document.getElementById('evDate').value = cal.event_date || (cal.start_time ? cal.start_time.split('T')[0] : '');
+        const startT = cal.start_time && cal.start_time.includes('T') ? cal.start_time.split('T')[1].substring(0, 5) : (cal.start_time || '');
+        const endT = cal.end_time && cal.end_time.includes('T') ? cal.end_time.split('T')[1].substring(0, 5) : (cal.end_time || '');
+        document.getElementById('evStartTime').value = startT;
+        document.getElementById('evEndTime').value = endT;
+        document.getElementById('evMeetLink').value = cal.meet_link || '';
+        document.getElementById('evDescription').value = cal.description || '';
+      } else if (isHidden) {
+        // Default title
+        document.getElementById('evTitle').value = 'Call with ' + (lead.contact_name || lead.company_name || '');
+        document.getElementById('evDate').value = '';
+        document.getElementById('evStartTime').value = '';
+        document.getElementById('evEndTime').value = '';
+        document.getElementById('evMeetLink').value = '';
+        document.getElementById('evDescription').value = '';
+      }
+    }
+
+    async function saveEvent() {
+      const title = document.getElementById('evTitle').value.trim();
+      const eventDate = document.getElementById('evDate').value;
+      const startTime = document.getElementById('evStartTime').value;
+      const endTime = document.getElementById('evEndTime').value;
+      const meetLink = document.getElementById('evMeetLink').value.trim();
+      const description = document.getElementById('evDescription').value.trim();
+
+      if (!title) { showToast('Title is required', 'error'); return; }
+
+      // Build start_time and end_time as ISO if date is provided
+      let startISO = '';
+      let endISO = '';
+      if (eventDate) {
+        startISO = startTime ? eventDate + 'T' + startTime + ':00' : eventDate;
+        endISO = endTime ? eventDate + 'T' + endTime + ':00' : '';
+      }
+
+      const body = {
+        title,
+        event_date: eventDate,
+        start_time: startISO || startTime,
+        end_time: endISO || endTime,
+        meet_link: meetLink,
+        description,
+        event_id: lead.calendar_event?.event_id || '',
+        attendees: lead.calendar_event?.attendees || []
+      };
+
+      // Add lead's email as attendee if not already present
+      const leadEmail = flattenEmail(lead.emails);
+      if (leadEmail && !body.attendees.includes(leadEmail)) {
+        body.attendees.push(leadEmail);
+      }
+
+      try {
+        const res = await fetch(`/api/leads/${leadId}/calendar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.success) {
+          lead.calendar_event = data.calendar_event;
+          renderCalendar();
+          document.getElementById('eventForm').style.display = 'none';
+          showToast('Event saved');
+          loadLead(); // refresh activity timeline
+        } else {
+          showToast(data.error || 'Failed to save event', 'error');
+        }
+      } catch (err) {
+        showToast('Error saving event', 'error');
+      }
+    }
+
+    async function deleteEvent() {
+      if (!confirm('Remove this scheduled event?')) return;
+      try {
+        const res = await fetch(`/api/leads/${leadId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ calendar_event: null })
+        });
+        const data = await res.json();
+        if (data.success !== false) {
+          lead.calendar_event = null;
+          renderCalendar();
+          document.getElementById('eventForm').style.display = 'none';
+          showToast('Event removed');
+        }
+      } catch (err) {
+        showToast('Error removing event', 'error');
+      }
+    }
+
+    function flattenEmail(emails) {
+      if (!emails || !emails.length) return '';
+      let e = emails[0];
+      if (Array.isArray(e)) e = e[0];
+      return typeof e === 'string' ? e : '';
+    }
+
+    function showToast(msg, type = 'success') {
       const t = document.getElementById('toast');
       t.textContent = msg;
       t.className = 'toast ' + type;
       setTimeout(() => t.classList.add('visible'), 10);
       setTimeout(() => t.classList.remove('visible'), 3000);
     }
-  </script>
-</body>
+  </script>y>
 </html>

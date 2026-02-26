@@ -1012,11 +1012,12 @@ app.post('/api/leads/:id/calendar', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-  const { event_id, title, start_time, end_time, meet_link, description, attendees } = req.body;
+  const { event_id, title, event_date, start_time, end_time, meet_link, description, attendees } = req.body;
 
   lead.calendar_event = {
     event_id: event_id || '',
     title: title || 'Call with ' + (lead.contact_name || lead.company_name),
+    event_date: event_date || '',
     start_time: start_time || '',
     end_time: end_time || '',
     meet_link: meet_link || '',
@@ -1028,7 +1029,7 @@ app.post('/api/leads/:id/calendar', requireApiOrSession, (req, res) => {
   if (!lead.activity) lead.activity = [];
   lead.activity.push({
     type: 'call_booked',
-    message: `Call booked: ${lead.calendar_event.title} on ${start_time || 'TBD'}`,
+    message: `Call booked: ${lead.calendar_event.title} on ${event_date || start_time || 'TBD'}`,
     timestamp: new Date().toISOString()
   });
 
