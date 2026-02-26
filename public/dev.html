@@ -242,6 +242,30 @@
           <div class="test-result" id="result_lead_outreach_logged"></div>
         </div>
 
+        <!-- Test: Proposal Created -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128196; proposal_created</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('proposal_created')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a proposal is created in the Proposal Builder. Includes lead_id if linked to a CRM lead.</div>
+          <button class="payload-toggle" onclick="togglePayload('proposal_created')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_proposal_created" style="display:none;"></div>
+          <div class="test-result" id="result_proposal_created"></div>
+        </div>
+
+        <!-- Test: Proposal Signed -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#9989; proposal_signed</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('proposal_signed')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a client signs a proposal. Includes lead_id, signature data, and Stripe payment link.</div>
+          <button class="payload-toggle" onclick="togglePayload('proposal_signed')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_proposal_signed" style="display:none;"></div>
+          <div class="test-result" id="result_proposal_signed"></div>
+        </div>
+
         <!-- Test: Campaign Email Due -->
         <div class="test-card">
           <div class="test-card-header">
@@ -1256,6 +1280,52 @@ Body:
           subject: 'AI Automation for Brightside Dental',
           body: 'Hi Sarah, I wanted to reach out about how we can help automate your front office operations with AI...',
           created_at: new Date().toISOString()
+        }
+      },
+      proposal_created: {
+        event: 'proposal_created',
+        timestamp: new Date().toISOString(),
+        proposal_url: 'https://proposals.flowtier.io/brightside-dental',
+        slug: 'brightside-dental',
+        proposal_id: 'FT26T01',
+        lead_id: 'test-uuid-' + Date.now(),
+        client: {
+          name: 'Sarah Mitchell',
+          company: 'Brightside Dental',
+          email: 'sarah@brightsidedental.com',
+          phone: '+1 555-123-4567'
+        },
+        project_name: 'AI Front Office Automation',
+        pricing: {
+          currency: 'usd',
+          due_now_cents: 150000,
+          total_setup_cents: 250000,
+          total_monthly_cents: 49900
+        },
+        created_date: new Date().toISOString().split('T')[0]
+      },
+      proposal_signed: {
+        event: 'proposal_signed',
+        timestamp: new Date().toISOString(),
+        proposal_url: 'https://proposals.flowtier.io/brightside-dental',
+        slug: 'brightside-dental',
+        proposal_id: 'FT26T01',
+        lead_id: 'test-uuid-' + Date.now(),
+        client: {
+          name: 'Sarah Mitchell',
+          company: 'Brightside Dental',
+          email: 'sarah@brightsidedental.com',
+          phone: '+1 555-123-4567'
+        },
+        signature: {
+          name: 'Sarah Mitchell',
+          date: new Date().toISOString()
+        },
+        payment_link: 'https://checkout.stripe.com/pay/cs_test_abc123',
+        amount_due: {
+          cents: 150000,
+          formatted: '$1,500.00',
+          currency: 'USD'
         }
       },
       campaign_email_due: {
