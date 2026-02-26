@@ -205,6 +205,8 @@
     // ════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', async () => {
       await loadConfig();
+      await loadAllLeadsForSidebar();
+      renderSidebar(); // Render sidebar with all leads for accurate counts
       await loadLeads();
       await loadStats();
       setupEvents();
@@ -223,6 +225,14 @@
       renderSidebar();
       renderPipeline();
       renderFilters();
+    }
+
+    let allLeadsUnfiltered = []; // All leads for sidebar counts
+
+    async function loadAllLeadsForSidebar() {
+      const res = await fetch('/api/leads');
+      const data = await res.json();
+      allLeadsUnfiltered = data.leads || [];
     }
 
     async function loadLeads() {
@@ -308,10 +318,12 @@
       const defaultIndustries = industries.filter(ind => ind !== 'Other');
       
       // Find custom industries: industries used by leads that aren't in the default list
+      // Use allLeadsUnfiltered so counts are always accurate regardless of current filter
+      const leadsForCounts = allLeadsUnfiltered.length > 0 ? allLeadsUnfiltered : allLeads;
       const customIndustries = [];
       const customIndustryCounts = {};
       const defaultSet = new Set(industries.map(i => i.toLowerCase()));
-      allLeads.forEach(l => {
+      leadsForCounts.forEach(l => {
         if (l.industry && !defaultSet.has(l.industry.toLowerCase())) {
           if (!customIndustries.includes(l.industry)) customIndustries.push(l.industry);
           customIndustryCounts[l.industry] = (customIndustryCounts[l.industry] || 0) + 1;
@@ -321,7 +333,7 @@
 
       // Count leads per default industry
       const defaultIndustryCounts = {};
-      allLeads.forEach(l => {
+      leadsForCounts.forEach(l => {
         if (l.industry && defaultSet.has(l.industry.toLowerCase())) {
           defaultIndustryCounts[l.industry] = (defaultIndustryCounts[l.industry] || 0) + 1;
         }
@@ -336,7 +348,7 @@
       `).join('');
 
       // "Other" with expandable custom industries — count = total across ALL custom industries
-      const otherCount = allLeads.filter(l => {
+      const otherCount = leadsForCounts.filter(l => {
         if (!l.industry) return true;
         return !defaultSet.has(l.industry.toLowerCase());
       }).length;
