@@ -1542,6 +1542,20 @@ app.get('/api/campaigns', requireApiOrSession, (req, res) => {
 app.get('/api/campaigns/:id', requireApiOrSession, (req, res) => {
   const campaign = readCampaign(req.params.id);
   if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  // Backfill contact_name and company_name for existing entries that lack them
+  let needsSave = false;
+  campaign.leads.forEach(entry => {
+    if (!entry.contact_name || !entry.company_name) {
+      const lead = readLead(entry.lead_id);
+      if (lead) {
+        if (!entry.contact_name) { entry.contact_name = lead.contact_name || ''; needsSave = true; }
+        if (!entry.company_name) { entry.company_name = lead.company_name || ''; needsSave = true; }
+      }
+    }
+  });
+  if (needsSave) writeCampaign(campaign);
+
   return res.json(campaign);
 });
 
@@ -1620,6 +1634,8 @@ app.post('/api/campaigns/:id/leads', requireApiOrSession, (req, res) => {
     campaign.leads.push({
       lead_id: id,
       email: primaryEmail,
+      contact_name: lead.contact_name || '',
+      company_name: lead.company_name || '',
       status: 'pending', // pending, sent, waiting, completed, replied, bounced, opted_out, blacklisted, error
       current_step: 1,
       last_sent_at: null,
