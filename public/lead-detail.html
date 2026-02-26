@@ -22,6 +22,7 @@
       </div>
       <nav class="sidebar-nav">
         <a href="/" class="nav-item"><span class="icon">&#8592;</span> Back to Dashboard</a>
+        <a href="/campaigns" class="nav-item" style="margin-top:8px;"><span class="icon">&#128233;</span> Campaigns</a>
       </nav>
       <div class="sidebar-footer">
         <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
@@ -69,8 +70,18 @@
 
           <!-- Enrichment / Details -->
           <div class="detail-card">
-            <h3>Enrichment Data</h3>
+            <h3>
+              Enrichment Data
+              <button class="btn btn-secondary btn-sm" id="editEnrichmentBtn" onclick="toggleEnrichmentEdit()">&#9998; Edit</button>
+            </h3>
             <div id="enrichmentData" style="font-size:0.8125rem;color:var(--color-text-secondary);line-height:1.7;white-space:pre-wrap;"></div>
+            <div id="enrichmentEditArea" style="display:none;margin-top:8px;">
+              <textarea id="enrichmentTextarea" rows="8" style="width:100%;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:10px;color:var(--color-text);font-family:inherit;font-size:0.8125rem;line-height:1.7;resize:vertical;"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn btn-primary btn-sm" onclick="saveEnrichment()">Save</button>
+                <button class="btn btn-secondary btn-sm" onclick="toggleEnrichmentEdit()">Cancel</button>
+              </div>
+            </div>
           </div>
 
           <!-- Outreach Tracking -->
@@ -329,14 +340,17 @@
       scoreBadge.textContent = 'Score: ' + score;
       scoreBadge.className = 'score-badge ' + scoreClass;
 
-      // Proposal button
+      // Proposal button — flatten nested arrays for emails/phones
       const proposalBtn = document.getElementById('proposalBtn');
       const proposalBase = 'https://proposals.flowtier.io/builder';
       const params = new URLSearchParams();
+      const flatEmails = (lead.emails || []).flat(Infinity).filter(e => typeof e === 'string' && e.includes('@'));
+      const flatPhones = (lead.phones || []).flat(Infinity).filter(p => typeof p === 'string' && p.length > 0);
       if (lead.contact_name) params.set('client_name', lead.contact_name);
       if (lead.company_name) params.set('company_name', lead.company_name);
-      if (lead.emails && lead.emails[0]) params.set('client_email', lead.emails[0]);
-      if (lead.phones && lead.phones[0]) params.set('client_phone', lead.phones[0]);
+      if (flatEmails[0]) params.set('client_email', flatEmails[0]);
+      if (flatPhones[0]) params.set('client_phone', flatPhones[0]);
+      if (lead.address) params.set('client_address', lead.address);
       proposalBtn.href = proposalBase + '?' + params.toString();
       proposalBtn.target = '_blank';
 
@@ -346,12 +360,12 @@
         `<option value="${s.id}" ${lead.stage === s.id ? 'selected' : ''}>${s.label}</option>`
       ).join('');
 
-      // Contact info
+      // Contact info — flatten nested arrays
       const websiteUrl = lead.website ? (lead.website.startsWith('http') ? lead.website : 'https://' + lead.website) : '';
       document.getElementById('contactInfo').innerHTML = `
         ${infoRow('Name', lead.contact_name)}
-        ${infoRow('Email(s)', (lead.emails || []).map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>') || '—')}
-        ${infoRow('Phone(s)', (lead.phones || []).map(p => `<a href="tel:${esc(p)}">${esc(p)}</a>`).join('<br>') || '—')}
+        ${infoRow('Email(s)', flatEmails.map(e => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>') || '—')}
+        ${infoRow('Phone(s)', flatPhones.map(p => `<a href="tel:${esc(p)}">${esc(p)}</a>`).join('<br>') || '—')}
         ${infoRow('LinkedIn', lead.linkedin ? `<a href="${esc(lead.linkedin)}" target="_blank">${esc(lead.linkedin)}</a>` : '—')}
         ${infoRow('Address', lead.address)}
       `;
@@ -367,7 +381,12 @@
       `;
 
       // Enrichment
-      document.getElementById('enrichmentData').textContent = lead.details || 'No enrichment data yet.';
+      const enrichmentEl = document.getElementById('enrichmentData');
+      enrichmentEl.textContent = lead.details || 'No enrichment data yet.';
+      // Reset edit area on re-render
+      document.getElementById('enrichmentEditArea').style.display = 'none';
+      enrichmentEl.style.display = '';
+      document.getElementById('editEnrichmentBtn').textContent = '\u270E Edit';
 
       // Overview
       const stage = stages.find(s => s.id === lead.stage) || { label: lead.stage, color: '#78909C' };
@@ -607,8 +626,50 @@
     }
 
     // ════════════════════════════════════════
+    // ENRICHMENT EDITING
+    // ════════════════════════════════════════
+    function toggleEnrichmentEdit() {
+      const editArea = document.getElementById('enrichmentEditArea');
+      const displayArea = document.getElementById('enrichmentData');
+      const btn = document.getElementById('editEnrichmentBtn');
+      if (editArea.style.display === 'none') {
+        document.getElementById('enrichmentTextarea').value = lead.details || '';
+        editArea.style.display = 'block';
+        displayArea.style.display = 'none';
+        btn.textContent = 'Cancel';
+        document.getElementById('enrichmentTextarea').focus();
+      } else {
+        editArea.style.display = 'none';
+        displayArea.style.display = '';
+        btn.textContent = '\u270E Edit';
+      }
+    }
+
+    async function saveEnrichment() {
+      const newDetails = document.getElementById('enrichmentTextarea').value.trim();
+      const res = await fetch('/api/leads/' + leadId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ details: newDetails })
+      });
+      if (res.ok) {
+        showToast('Enrichment data saved', 'success');
+        await loadLead();
+      } else {
+        showToast('Failed to save enrichment data', 'error');
+      }
+    }
+
+    // ════════════════════════════════════════
     // ATTACHMENTS
     // ════════════════════════════════════════
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
     function renderAttachments() {
       const list = document.getElementById('attachmentList');
       if (!lead.attachments || lead.attachments.length === 0) {
@@ -623,10 +684,15 @@
       list.innerHTML = lead.attachments.map(a => {
         const ext = a.filename.split('.').pop().toLowerCase();
         const icon = iconMap[ext] || '&#128196;';
+        const size = formatFileSize(a.size);
+        const uploadDate = a.uploaded_at ? formatDate(a.uploaded_at) : '';
         return `
           <div class="attachment-item">
             <span class="attachment-icon">${icon}</span>
-            <a href="${a.url}" target="_blank" class="attachment-name" title="${esc(a.filename)}">${esc(a.filename)}</a>
+            <div style="flex:1;min-width:0;">
+              <a href="${a.url}" target="_blank" class="attachment-name" title="${esc(a.filename)}" style="display:block;max-width:100%;">${esc(a.filename)}</a>
+              ${size ? `<div style="font-size:0.6875rem;color:var(--color-text-muted);">${size}${uploadDate ? ' &middot; ' + uploadDate : ''}</div>` : ''}
+            </div>
             <button class="attachment-delete" onclick="deleteAttachment('${a.id}')" title="Delete">&times;</button>
           </div>
         `;

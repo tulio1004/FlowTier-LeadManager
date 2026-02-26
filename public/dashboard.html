@@ -19,6 +19,10 @@
         <div class="app-label">Lead Management</div>
       </div>
       <nav class="sidebar-nav">
+        <a href="/campaigns" class="nav-item" style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.2);border-radius:8px;margin-bottom:12px;font-weight:600;">
+          <span class="icon">&#128233;</span> Campaigns
+        </a>
+
         <div class="nav-section-label">Pipeline</div>
         <a href="/" class="nav-item active" data-view="all">
           <span class="icon">&#9776;</span> All Leads <span class="count" id="countAll">0</span>
@@ -29,7 +33,6 @@
         <div id="industryNav"></div>
       </nav>
       <div class="sidebar-footer">
-        <a href="/campaigns" style="margin-bottom:8px;"><span class="icon">&#128233;</span> Campaigns</a>
         <a href="/import" style="margin-bottom:8px;"><span class="icon">&#8679;</span> CSV Import</a>
         <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
         <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
@@ -124,11 +127,18 @@
       <!-- Bulk Actions -->
       <div class="bulk-bar" id="bulkBar">
         <span class="bulk-count" id="bulkCount">0</span> selected
-        <select class="filter-select" id="bulkStageSelect" style="margin-left:auto;">
-          <option value="">Change Stage...</option>
-        </select>
-        <button class="btn btn-sm btn-secondary" id="bulkApplyStage">Apply</button>
-        <button class="btn btn-sm btn-danger" id="bulkDeleteBtn">Delete</button>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <select class="filter-select" id="bulkStageSelect">
+            <option value="">Change Stage...</option>
+          </select>
+          <button class="btn btn-sm btn-secondary" id="bulkApplyStage">Apply</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;border-left:1px solid var(--color-border);padding-left:12px;">
+          <input type="text" id="bulkTagInput" placeholder="Tag name..." class="filter-select" style="width:140px;">
+          <button class="btn btn-sm btn-primary" id="bulkAddTagBtn" title="Add tag to selected leads">+ Tag</button>
+          <button class="btn btn-sm btn-secondary" id="bulkRemoveTagBtn" title="Remove tag from selected leads">- Tag</button>
+        </div>
+        <button class="btn btn-sm btn-danger" id="bulkDeleteBtn" style="margin-left:8px;">Delete</button>
         <button class="btn btn-sm btn-secondary" id="bulkClearBtn">Clear</button>
       </div>
 
@@ -744,6 +754,11 @@
       });
 
       document.getElementById('bulkApplyStage').addEventListener('click', bulkChangeStage);
+      document.getElementById('bulkAddTagBtn').addEventListener('click', () => bulkTag('add'));
+      document.getElementById('bulkRemoveTagBtn').addEventListener('click', () => bulkTag('remove'));
+      document.getElementById('bulkTagInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') bulkTag('add');
+      });
       document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDelete);
       document.getElementById('bulkClearBtn').addEventListener('click', () => {
         selectedIds.clear();
@@ -858,6 +873,29 @@
         updateBulkBar();
         loadLeads();
         loadStats();
+      }
+    }
+
+    async function bulkTag(action) {
+      const tagInput = document.getElementById('bulkTagInput');
+      const tag = tagInput.value.trim();
+      if (!tag) { showToast('Enter a tag name', 'error'); tagInput.focus(); return; }
+      if (selectedIds.size === 0) return;
+
+      const res = await fetch('/api/leads/bulk/tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds], tag, action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const verb = action === 'remove' ? 'Removed' : 'Added';
+        showToast(`${verb} tag "${tag}" on ${data.updated} leads`, 'success');
+        tagInput.value = '';
+        selectedIds.clear();
+        document.getElementById('selectAll').checked = false;
+        updateBulkBar();
+        loadLeads();
       }
     }
 

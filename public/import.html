@@ -114,6 +114,14 @@
             </div>
           </div>
 
+          <!-- Default Tags -->
+          <div style="margin-top:12px;padding:16px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Tags to Apply to All Imported Leads <span style="color:var(--color-text-muted);font-weight:400;">(optional, comma or semicolon separated)</span></label>
+              <input type="text" id="defaultTags" placeholder="e.g., cold-outreach, google-ads, Q1-2026" style="max-width:500px;">
+            </div>
+          </div>
+
           <div style="margin-top:20px;display:flex;gap:12px;">
             <button class="btn btn-secondary" onclick="goToStep(1)">&#8592; Back</button>
             <button class="btn btn-primary" onclick="goToStep(3)">Preview Import &#8594;</button>
@@ -421,9 +429,22 @@
       let duplicates = 0;
       const errors = [];
 
+      // Parse default tags
+      const defaultTagsStr = (document.getElementById('defaultTags').value || '').trim();
+      const defaultTags = defaultTagsStr ? defaultTagsStr.split(/[,;]/).map(t => t.trim()).filter(Boolean) : [];
+
       for (let i = 0; i < csvData.length; i++) {
         const lead = buildLeadFromRow(csvData[i], mapping);
         lead._source = 'csv_import';
+
+        // Merge default tags with any tags from CSV column
+        if (defaultTags.length > 0) {
+          if (!lead.tags) lead.tags = [];
+          if (typeof lead.tags === 'string') lead.tags = lead.tags.split(/[,;]/).map(t => t.trim()).filter(Boolean);
+          defaultTags.forEach(dt => {
+            if (!lead.tags.some(t => t.toLowerCase() === dt.toLowerCase())) lead.tags.push(dt);
+          });
+        }
 
         try {
           const res = await fetch('/api/leads', {
