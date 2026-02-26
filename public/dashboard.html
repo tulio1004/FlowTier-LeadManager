@@ -29,6 +29,7 @@
         <div id="industryNav"></div>
       </nav>
       <div class="sidebar-footer">
+        <a href="/campaigns" style="margin-bottom:8px;"><span class="icon">&#128233;</span> Campaigns</a>
         <a href="/import" style="margin-bottom:8px;"><span class="icon">&#8679;</span> CSV Import</a>
         <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
         <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
@@ -353,7 +354,8 @@
         return !defaultSet.has(l.industry.toLowerCase());
       }).length;
       const otherActive = currentIndustryFilter === 'Other' || customIndustries.includes(currentIndustryFilter);
-      const otherExpanded = otherActive || customIndustries.length > 0;
+      // Only auto-expand if a custom industry is actively selected, otherwise stay collapsed
+      const otherExpanded = customIndustries.includes(currentIndustryFilter);
 
       html += `
         <div class="nav-item-group${otherExpanded ? ' expanded' : ''}">
@@ -363,7 +365,7 @@
             ${customIndustries.length > 0 ? '<span class="expand-toggle" onclick="event.preventDefault();event.stopPropagation();this.closest(\'.nav-item-group\').classList.toggle(\'expanded\');" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:0.7rem;color:var(--color-text-muted);padding:4px;">&#9660;</span>' : ''}
           </a>
           ${customIndustries.length > 0 ? `
-            <div class="custom-industries-sub ${otherExpanded ? 'expanded' : ''}">
+            <div class="custom-industries-sub${otherExpanded ? ' expanded' : ''}">
               ${customIndustries.map(ci => `
                 <a href="/industry/${encodeURIComponent(ci)}" class="nav-item sub-item ${currentIndustryFilter === ci ? 'active' : ''}" style="padding-left:36px;font-size:0.75rem;">
                   <span class="icon" style="font-size:0.65rem;">&#9702;</span> ${ci}

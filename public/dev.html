@@ -242,6 +242,42 @@
           <div class="test-result" id="result_lead_outreach_logged"></div>
         </div>
 
+        <!-- Test: Campaign Email Due -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128233; campaign_email_due</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('campaign_email_due')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a campaign email is due to be sent. Contains lead data, email template, step info, and callback URL for Make.com.</div>
+          <button class="payload-toggle" onclick="togglePayload('campaign_email_due')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_campaign_email_due" style="display:none;"></div>
+          <div class="test-result" id="result_campaign_email_due"></div>
+        </div>
+
+        <!-- Test: Campaign Reply Received -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#128172; campaign_reply_received</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('campaign_reply_received')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when a lead replies to a campaign email. Sequence is auto-paused for this lead.</div>
+          <button class="payload-toggle" onclick="togglePayload('campaign_reply_received')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_campaign_reply_received" style="display:none;"></div>
+          <div class="test-result" id="result_campaign_reply_received"></div>
+        </div>
+
+        <!-- Test: Campaign Bounce -->
+        <div class="test-card">
+          <div class="test-card-header">
+            <div class="test-card-title">&#9888; campaign_email_bounced</div>
+            <button class="btn btn-primary btn-sm" onclick="testWebhook('campaign_email_bounced')">Send Test</button>
+          </div>
+          <div class="test-card-desc">Fired when an email bounces. Lead is marked as bounced and removed from the sequence.</div>
+          <button class="payload-toggle" onclick="togglePayload('campaign_email_bounced')">Show Payload &#9660;</button>
+          <div class="code-block" id="payload_campaign_email_bounced" style="display:none;"></div>
+          <div class="test-result" id="result_campaign_email_bounced"></div>
+        </div>
+
         <!-- Webhook History -->
         <div style="margin-top:24px;">
           <h3 style="font-size:0.9375rem;font-weight:700;margin-bottom:12px;">Webhook Delivery History</h3>
@@ -272,6 +308,9 @@
           <button class="tab-btn" onclick="switchTab('bulk')">Bulk Actions</button>
           <button class="tab-btn" onclick="switchTab('import')">Import / Export</button>
           <button class="tab-btn" onclick="switchTab('config')">Config</button>
+          <button class="tab-btn" onclick="switchTab('campaigns')">Campaigns</button>
+          <button class="tab-btn" onclick="switchTab('conversations')">Conversations</button>
+          <button class="tab-btn" onclick="switchTab('blacklist')">Blacklist</button>
         </div>
 
         <!-- LEADS CRUD TAB -->
@@ -591,6 +630,250 @@ Tags, Stage, Assigned To, Deal Value, Details
             <div class="code-block">{ "url": "https://hook.us2.make.com/your-webhook-id" }</div>
           </div>
         </div>
+
+        <!-- CAMPAIGNS TAB -->
+        <div class="tab-content" id="tab-campaigns">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns</span>
+            </div>
+            <div class="endpoint-desc">Create a new email campaign.</div>
+            <div class="code-block">{
+  "name": "Construction Outreach Q1",
+  "description": "Cold outreach to construction companies",
+  "webhook_url": "https://hook.us1.make.com/abc123"
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/campaigns</span>
+            </div>
+            <div class="endpoint-desc">List all campaigns with stats.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/campaigns/:id</span>
+            </div>
+            <div class="endpoint-desc">Get full campaign details including leads, steps, schedule, and stats.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge patch">PATCH</span>
+              <span class="endpoint-path">/api/campaigns/:id</span>
+            </div>
+            <div class="endpoint-desc">Update campaign settings (name, description, webhook_url, schedule).</div>
+            <div class="code-block">{
+  "name": "Updated Name",
+  "schedule": {
+    "frequency_minutes": 5,
+    "daily_limit": 50,
+    "timezone": "America/New_York",
+    "days_of_week": [1, 2, 3, 4, 5],
+    "time_windows": [
+      { "start": "09:00", "end": "12:00" },
+      { "start": "14:00", "end": "17:00" }
+    ]
+  }
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge delete">DELETE</span>
+              <span class="endpoint-path">/api/campaigns/:id</span>
+            </div>
+            <div class="endpoint-desc">Delete a campaign.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/steps</span>
+            </div>
+            <div class="endpoint-desc">Add or update email sequence steps. Each step has a subject template, body template, delay, and active flag.</div>
+            <div class="code-block">{
+  "steps": [
+    {
+      "step_number": 1,
+      "subject_template": "{{company_name}} - AI Automation Opportunity",
+      "body_template": "Hi {{contact_name}}, I noticed {{company_name}} is growing fast in {{industry}}...",
+      "delay_days": 0,
+      "active": true
+    },
+    {
+      "step_number": 2,
+      "subject_template": "Re: {{company_name}} - Quick follow-up",
+      "body_template": "Hi {{first_name}}, just following up on my previous email...",
+      "delay_days": 3,
+      "active": true
+    }
+  ]
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/leads</span>
+            </div>
+            <div class="endpoint-desc">Import leads into a campaign by their IDs.</div>
+            <div class="code-block">{ "lead_ids": ["uuid-1", "uuid-2", "uuid-3"] }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge delete">DELETE</span>
+              <span class="endpoint-path">/api/campaigns/:id/leads/:leadId</span>
+            </div>
+            <div class="endpoint-desc">Remove a lead from a campaign.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/start</span>
+            </div>
+            <div class="endpoint-desc">Start or resume a campaign. The scheduler will begin sending webhooks according to the schedule.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/pause</span>
+            </div>
+            <div class="endpoint-desc">Pause an active campaign. No more webhooks will be sent until resumed.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/clone</span>
+            </div>
+            <div class="endpoint-desc">Clone a campaign with all its steps and settings. Leads are not copied.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/log-send</span>
+            </div>
+            <div class="endpoint-desc"><strong>Callback from Make.com</strong> — Log that an email was successfully sent. This marks the lead as "sent" for the current step and records the email in outreach history.</div>
+            <div class="code-block">{
+  "lead_id": "uuid-of-lead",
+  "step_number": 1,
+  "subject": "Rodrigues Flooring - AI Automation Opportunity",
+  "body": "Hi Lenny, I noticed Rodrigues Flooring is growing fast...",
+  "from_email": "tulio@flowtier.io"
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/reply</span>
+            </div>
+            <div class="endpoint-desc"><strong>From Make.com</strong> — Log a reply from a lead. Auto-pauses the sequence for this lead and updates their stage.</div>
+            <div class="code-block">{
+  "lead_id": "uuid-of-lead",
+  "subject": "Re: Rodrigues Flooring - AI Automation",
+  "body": "Hey, this sounds interesting. Can we talk Thursday?",
+  "from_email": "lenny@rodriguesflooring.com"
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/campaigns/:id/bounce</span>
+            </div>
+            <div class="endpoint-desc"><strong>From Make.com</strong> — Log a bounced email. Marks the lead as bounced and stops the sequence.</div>
+            <div class="code-block">{
+  "lead_id": "uuid-of-lead",
+  "email": "invalid@example.com",
+  "reason": "Mailbox not found"
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/campaigns/:id/analytics</span>
+            </div>
+            <div class="endpoint-desc">Get campaign analytics: sent count, reply rate, bounce rate, step performance, daily sends.</div>
+          </div>
+        </div>
+
+        <!-- CONVERSATIONS TAB -->
+        <div class="tab-content" id="tab-conversations">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/leads/:id/conversations</span>
+            </div>
+            <div class="endpoint-desc">Get the full conversation history for a lead — all outreach emails sent and replies received, ordered chronologically. <strong>Use this endpoint to give your AI agent full context.</strong></div>
+            <div class="code-block">// Response:
+{
+  "lead_id": "uuid",
+  "contact_name": "Lenny Rodrigues",
+  "company_name": "Rodrigues Flooring",
+  "conversations": [
+    {
+      "direction": "outbound",
+      "subject": "Rodrigues Flooring - AI Automation",
+      "body": "Hi Lenny, I noticed...",
+      "from": "tulio@flowtier.io",
+      "to": "lenny@rodriguesflooring.com",
+      "timestamp": "2026-02-26T10:05:00Z",
+      "campaign": "Construction Outreach Q1",
+      "step": 1
+    },
+    {
+      "direction": "inbound",
+      "subject": "Re: Rodrigues Flooring - AI Automation",
+      "body": "Hey, this sounds interesting. Can we talk Thursday?",
+      "from": "lenny@rodriguesflooring.com",
+      "timestamp": "2026-02-26T14:30:00Z"
+    }
+  ],
+  "notes": [...],
+  "lead_details": { ... }
+}</div>
+          </div>
+        </div>
+
+        <!-- BLACKLIST TAB -->
+        <div class="tab-content" id="tab-blacklist">
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/blacklist</span>
+            </div>
+            <div class="endpoint-desc">Get all blacklisted emails. Blacklisted emails are automatically skipped in all campaigns.</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge post">POST</span>
+              <span class="endpoint-path">/api/blacklist</span>
+            </div>
+            <div class="endpoint-desc">Add an email to the global blacklist.</div>
+            <div class="code-block">{ "email": "unsubscribe@example.com", "reason": "Requested opt-out" }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="endpoint-header">
+              <span class="method-badge delete">DELETE</span>
+              <span class="endpoint-path">/api/blacklist/:email</span>
+            </div>
+            <div class="endpoint-desc">Remove an email from the blacklist.</div>
+          </div>
+        </div>
       </div>
 
       <!-- ═══════════════════════════════════ -->
@@ -791,6 +1074,66 @@ Body:
           subject: 'AI Automation for Brightside Dental',
           body: 'Hi Sarah, I wanted to reach out about how we can help automate your front office operations with AI...',
           created_at: new Date().toISOString()
+        }
+      },
+      campaign_email_due: {
+        event: 'campaign_email_due',
+        timestamp: new Date().toISOString(),
+        campaign_id: 'camp-test-' + Date.now(),
+        campaign_name: 'Construction Outreach Q1',
+        step: {
+          number: 1,
+          subject_template: '{{company_name}} - AI Automation Opportunity',
+          body_template: 'Hi {{contact_name}}, I noticed {{company_name}} is growing fast in {{industry}}. We help companies like yours automate their operations with AI...',
+          delay_days: 0
+        },
+        lead: {
+          id: 'test-uuid-' + Date.now(),
+          contact_name: 'Sarah Mitchell',
+          company_name: 'Brightside Dental',
+          email: 'sarah@brightsidedental.com',
+          industry: 'Dental',
+          website: 'brightsidedental.com',
+          details: 'Family dental practice, 3 locations, interested in AI chatbot',
+          conversation_history: []
+        },
+        callback_url: 'https://leads.flowtier.io/api/campaigns/camp-test/log-send'
+      },
+      campaign_reply_received: {
+        event: 'campaign_reply_received',
+        timestamp: new Date().toISOString(),
+        campaign_id: 'camp-test-' + Date.now(),
+        campaign_name: 'Construction Outreach Q1',
+        lead: {
+          id: 'test-uuid-' + Date.now(),
+          contact_name: 'Sarah Mitchell',
+          company_name: 'Brightside Dental',
+          email: 'sarah@brightsidedental.com'
+        },
+        reply: {
+          subject: 'Re: Brightside Dental - AI Automation Opportunity',
+          body: 'Hey, this sounds interesting. Can we schedule a call for Thursday?',
+          from_email: 'sarah@brightsidedental.com',
+          received_at: new Date().toISOString()
+        },
+        sequence_paused: true,
+        new_stage: 'qualified'
+      },
+      campaign_email_bounced: {
+        event: 'campaign_email_bounced',
+        timestamp: new Date().toISOString(),
+        campaign_id: 'camp-test-' + Date.now(),
+        campaign_name: 'Construction Outreach Q1',
+        lead: {
+          id: 'test-uuid-' + Date.now(),
+          contact_name: 'Sarah Mitchell',
+          company_name: 'Brightside Dental',
+          email: 'sarah@brightsidedental.com'
+        },
+        bounce: {
+          email: 'sarah@brightsidedental.com',
+          reason: 'Mailbox not found',
+          bounced_at: new Date().toISOString()
         }
       }
     };

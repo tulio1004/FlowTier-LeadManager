@@ -9,6 +9,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
+const {
+  readCampaign, writeCampaign, deleteCampaignFile, getAllCampaigns,
+  createCampaignObject, getBlacklist, saveBlacklist, isBlacklisted,
+  addToBlacklist, removeFromBlacklist, CampaignScheduler
+} = require('./campaign-engine');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -1508,6 +1513,584 @@ app.post('/api/dev/test-webhook', async (req, res) => {
 });
 
 // ============================================
+// CAMPAIGN SCHEDULER INSTANCE
+// ============================================
+const campaignScheduler = new CampaignScheduler(readLead, writeLead, addWebhookHistory);
+
+// ============================================
+// PAGE ROUTES: CAMPAIGNS
+// ============================================
+app.get('/campaigns', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'campaigns.html'));
+});
+
+app.get('/campaigns/:id', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'campaign-detail.html'));
+});
+
+// ============================================
+// API: CAMPAIGNS CRUD
+// ============================================
+
+// List all campaigns
+app.get('/api/campaigns', requireApiOrSession, (req, res) => {
+  const campaigns = getAllCampaigns();
+  return res.json({ campaigns, total: campaigns.length });
+});
+
+// Get single campaign
+app.get('/api/campaigns/:id', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  return res.json(campaign);
+});
+
+// Create campaign
+app.post('/api/campaigns', requireApiOrSession, (req, res) => {
+  try {
+    const campaign = createCampaignObject(req.body);
+    campaign.stats.total_leads = campaign.leads.length;
+    writeCampaign(campaign);
+    console.log(`[Campaign] Created: ${campaign.id} (${campaign.name})`);
+    return res.json({ success: true, campaign });
+  } catch (err) {
+    console.error('Error creating campaign:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update campaign
+app.patch('/api/campaigns/:id', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const fields = ['name', 'description', 'webhook_url', 'schedule', 'steps'];
+  fields.forEach(f => {
+    if (req.body[f] !== undefined) campaign[f] = req.body[f];
+  });
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  // If active, restart with new settings
+  if (campaign.status === 'active') {
+    campaignScheduler.stopCampaign(campaign.id);
+    campaignScheduler.startCampaign(campaign.id);
+  }
+
+  return res.json({ success: true, campaign });
+});
+
+// Delete campaign
+app.delete('/api/campaigns/:id', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  campaignScheduler.stopCampaign(req.params.id);
+  deleteCampaignFile(req.params.id);
+  return res.json({ success: true });
+});
+
+// ============================================
+// API: CAMPAIGN LEADS
+// ============================================
+
+// Import leads into campaign
+app.post('/api/campaigns/:id/leads', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const { lead_ids } = req.body;
+  if (!Array.isArray(lead_ids)) return res.status(400).json({ error: 'lead_ids array required' });
+
+  const existingIds = new Set(campaign.leads.map(l => l.lead_id));
+  let added = 0;
+
+  lead_ids.forEach(id => {
+    if (existingIds.has(id)) return; // skip duplicates
+    const lead = readLead(id);
+    if (!lead) return;
+
+    let primaryEmail = (lead.emails || [])[0];
+    // Handle nested arrays (e.g., [['email@example.com']])
+    if (Array.isArray(primaryEmail)) primaryEmail = primaryEmail[0];
+    if (!primaryEmail || typeof primaryEmail !== 'string') return; // skip leads without email
+
+    // Check blacklist
+    if (isBlacklisted(primaryEmail)) return;
+
+    campaign.leads.push({
+      lead_id: id,
+      email: primaryEmail,
+      status: 'pending', // pending, sent, waiting, completed, replied, bounced, opted_out, blacklisted, error
+      current_step: 1,
+      last_sent_at: null,
+      sent_count: 0,
+      last_step_sent: 0,
+      paused: false,
+      added_at: new Date().toISOString()
+    });
+    added++;
+  });
+
+  campaign.stats.total_leads = campaign.leads.length;
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  return res.json({ success: true, added, total: campaign.leads.length });
+});
+
+// Remove lead from campaign
+app.delete('/api/campaigns/:id/leads/:leadId', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  campaign.leads = campaign.leads.filter(l => l.lead_id !== req.params.leadId);
+  campaign.stats.total_leads = campaign.leads.length;
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  return res.json({ success: true });
+});
+
+// Pause/unpause a lead in campaign
+app.patch('/api/campaigns/:id/leads/:leadId', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const entry = campaign.leads.find(l => l.lead_id === req.params.leadId);
+  if (!entry) return res.status(404).json({ error: 'Lead not in campaign' });
+
+  if (req.body.paused !== undefined) entry.paused = req.body.paused;
+  if (req.body.status !== undefined) entry.status = req.body.status;
+  if (req.body.current_step !== undefined) entry.current_step = req.body.current_step;
+
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  return res.json({ success: true, entry });
+});
+
+// ============================================
+// API: CAMPAIGN STEPS (sequence)
+// ============================================
+app.post('/api/campaigns/:id/steps', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const { steps } = req.body;
+  if (!Array.isArray(steps)) return res.status(400).json({ error: 'steps array required' });
+
+  campaign.steps = steps.map((s, i) => ({
+    id: s.id || uuidv4(),
+    step_number: i + 1,
+    subject_template: s.subject_template || '',
+    body_template: s.body_template || '',
+    delay_days: s.delay_days || (i === 0 ? 0 : 3),
+    active: s.active !== false
+  }));
+
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  return res.json({ success: true, steps: campaign.steps });
+});
+
+// ============================================
+// API: CAMPAIGN CONTROL (start/pause/resume)
+// ============================================
+app.post('/api/campaigns/:id/start', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  if (!campaign.webhook_url) {
+    return res.status(400).json({ error: 'Webhook URL is required to start a campaign' });
+  }
+  if (campaign.leads.length === 0) {
+    return res.status(400).json({ error: 'Add leads to the campaign before starting' });
+  }
+  if (campaign.steps.length === 0 || !campaign.steps.some(s => s.active)) {
+    return res.status(400).json({ error: 'At least one active email step is required' });
+  }
+
+  campaign.status = 'active';
+  campaign.started_at = campaign.started_at || new Date().toISOString();
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  campaignScheduler.startCampaign(campaign.id);
+
+  return res.json({ success: true, status: 'active' });
+});
+
+app.post('/api/campaigns/:id/pause', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  campaign.status = 'paused';
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  campaignScheduler.stopCampaign(campaign.id);
+
+  return res.json({ success: true, status: 'paused' });
+});
+
+// ============================================
+// API: CAMPAIGN CALLBACKS (from Make.com)
+// ============================================
+
+// Log that an email was actually sent (callback from Make.com)
+app.post('/api/campaigns/:id/log-send', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const { lead_id, subject, body, from_email, step_number } = req.body;
+  const entry = campaign.leads.find(l => l.lead_id === lead_id);
+  if (!entry) return res.status(404).json({ error: 'Lead not in campaign' });
+
+  // Log on the lead
+  const lead = readLead(lead_id);
+  if (lead) {
+    if (!lead.outreach) lead.outreach = [];
+    lead.outreach.unshift({
+      id: uuidv4(),
+      direction: 'sent',
+      channel: 'email',
+      subject: subject || '',
+      body: body || '',
+      from_email: from_email || '',
+      to_email: entry.email,
+      campaign_id: campaign.id,
+      campaign_step: step_number || entry.last_step_sent,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!lead.activity) lead.activity = [];
+    lead.activity.push({
+      type: 'outreach',
+      message: `Campaign "${campaign.name}" email confirmed sent: ${subject || '(no subject)'}`,
+      campaign_id: campaign.id,
+      timestamp: new Date().toISOString()
+    });
+
+    lead.last_contacted = new Date().toISOString();
+    lead.updated_at = new Date().toISOString();
+
+    // Auto-stage: cold -> contacted
+    if (lead.stage === 'cold') {
+      checkAutoStageRules(lead, 'outreach_sent');
+    }
+
+    writeLead(lead);
+  }
+
+  return res.json({ success: true });
+});
+
+// Log a reply from a lead (from Make.com mailbox watcher)
+app.post('/api/campaigns/:id/reply', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const { lead_id, email, subject, body, from_email } = req.body;
+
+  // Find lead in campaign by lead_id or email
+  let entry;
+  if (lead_id) {
+    entry = campaign.leads.find(l => l.lead_id === lead_id);
+  }
+  if (!entry && email) {
+    entry = campaign.leads.find(l => l.email.toLowerCase() === email.toLowerCase());
+  }
+  if (!entry && from_email) {
+    entry = campaign.leads.find(l => l.email.toLowerCase() === from_email.toLowerCase());
+  }
+
+  if (!entry) return res.status(404).json({ error: 'Lead not found in campaign. Provide lead_id or matching email.' });
+
+  // Auto-pause: stop sending to this lead
+  entry.status = 'replied';
+  campaign.stats.replies_received++;
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  // Log on the lead
+  const lead = readLead(entry.lead_id);
+  if (lead) {
+    if (!lead.outreach) lead.outreach = [];
+    lead.outreach.unshift({
+      id: uuidv4(),
+      direction: 'received',
+      channel: 'email',
+      subject: subject || '',
+      body: body || '',
+      from_email: from_email || entry.email,
+      to_email: '',
+      campaign_id: campaign.id,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!lead.activity) lead.activity = [];
+    lead.activity.push({
+      type: 'outreach',
+      message: `Reply received from ${entry.email}: ${subject || '(no subject)'}`,
+      campaign_id: campaign.id,
+      timestamp: new Date().toISOString()
+    });
+
+    lead.last_contacted = new Date().toISOString();
+    lead.updated_at = new Date().toISOString();
+
+    // Auto-stage: move to qualified if contacted
+    if (lead.stage === 'contacted') {
+      const oldStage = lead.stage;
+      lead.stage = 'qualified';
+      lead.activity.push({
+        type: 'stage_change',
+        message: 'Stage auto-changed from Contacted to Qualified (reply received)',
+        from: oldStage,
+        to: 'qualified',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    writeLead(lead);
+  }
+
+  return res.json({ success: true, message: 'Reply logged. Lead paused in campaign.' });
+});
+
+// Log a bounce
+app.post('/api/campaigns/:id/bounce', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const { lead_id, email, reason } = req.body;
+
+  let entry;
+  if (lead_id) entry = campaign.leads.find(l => l.lead_id === lead_id);
+  if (!entry && email) entry = campaign.leads.find(l => l.email.toLowerCase() === email.toLowerCase());
+
+  if (!entry) return res.status(404).json({ error: 'Lead not found in campaign' });
+
+  entry.status = 'bounced';
+  campaign.stats.bounces++;
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  // Add to blacklist
+  addToBlacklist(entry.email, reason || 'Bounced');
+
+  // Log on lead
+  const lead = readLead(entry.lead_id);
+  if (lead) {
+    if (!lead.activity) lead.activity = [];
+    lead.activity.push({
+      type: 'bounce',
+      message: `Email bounced: ${entry.email} — ${reason || 'Unknown reason'}`,
+      campaign_id: campaign.id,
+      timestamp: new Date().toISOString()
+    });
+    lead.updated_at = new Date().toISOString();
+    writeLead(lead);
+  }
+
+  return res.json({ success: true, message: 'Bounce logged. Email blacklisted.' });
+});
+
+// Opt-out a lead
+app.post('/api/campaigns/:id/opt-out', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const { lead_id, email } = req.body;
+  let entry;
+  if (lead_id) entry = campaign.leads.find(l => l.lead_id === lead_id);
+  if (!entry && email) entry = campaign.leads.find(l => l.email.toLowerCase() === email.toLowerCase());
+
+  if (!entry) return res.status(404).json({ error: 'Lead not found in campaign' });
+
+  entry.status = 'opted_out';
+  campaign.stats.opted_out++;
+  campaign.updated_at = new Date().toISOString();
+  writeCampaign(campaign);
+
+  addToBlacklist(entry.email, 'Opted out');
+
+  return res.json({ success: true });
+});
+
+// ============================================
+// API: CAMPAIGN ANALYTICS
+// ============================================
+app.get('/api/campaigns/:id/analytics', requireApiOrSession, (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+  const statusCounts = {};
+  campaign.leads.forEach(l => {
+    statusCounts[l.status] = (statusCounts[l.status] || 0) + 1;
+  });
+
+  const stepStats = campaign.steps.map(step => {
+    const sentInStep = campaign.leads.filter(l => l.last_step_sent >= step.step_number).length;
+    return {
+      step_number: step.step_number,
+      subject: step.subject_template,
+      sent: sentInStep,
+      delay_days: step.delay_days
+    };
+  });
+
+  const replyRate = campaign.stats.emails_sent > 0
+    ? Math.round((campaign.stats.replies_received / campaign.stats.emails_sent) * 100)
+    : 0;
+
+  const bounceRate = campaign.stats.emails_sent > 0
+    ? Math.round((campaign.stats.bounces / campaign.stats.emails_sent) * 100)
+    : 0;
+
+  return res.json({
+    campaign_id: campaign.id,
+    campaign_name: campaign.name,
+    status: campaign.status,
+    total_leads: campaign.leads.length,
+    emails_sent: campaign.stats.emails_sent,
+    replies_received: campaign.stats.replies_received,
+    bounces: campaign.stats.bounces,
+    opted_out: campaign.stats.opted_out,
+    reply_rate: replyRate,
+    bounce_rate: bounceRate,
+    sends_today: campaign.stats.sends_today,
+    daily_limit: campaign.schedule.daily_limit,
+    status_breakdown: statusCounts,
+    step_stats: stepStats,
+    started_at: campaign.started_at,
+    completed_at: campaign.completed_at
+  });
+});
+
+// ============================================
+// API: CONVERSATION HISTORY (for AI agent)
+// ============================================
+app.get('/api/leads/:id/conversations', requireApiOrSession, (req, res) => {
+  const lead = readLead(req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+  // Combine outreach into chronological conversation
+  const conversations = (lead.outreach || [])
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    .map(o => ({
+      direction: o.direction,
+      channel: o.channel,
+      subject: o.subject,
+      body: o.body,
+      from_email: o.from_email,
+      to_email: o.to_email,
+      campaign_id: o.campaign_id || null,
+      campaign_step: o.campaign_step || null,
+      timestamp: o.timestamp
+    }));
+
+  // Include notes for context
+  const notes = (lead.notes || []).map(n => ({
+    title: n.title,
+    content: n.content ? n.content.replace(/<[^>]*>/g, '') : '',
+    type: n.type,
+    created_at: n.created_at
+  }));
+
+  return res.json({
+    lead_id: lead.id,
+    contact_name: lead.contact_name,
+    company_name: lead.company_name,
+    emails: lead.emails,
+    phones: lead.phones,
+    industry: lead.industry,
+    website: lead.website,
+    stage: lead.stage,
+    details: lead.details,
+    conversations,
+    notes,
+    total_messages: conversations.length
+  });
+});
+
+// ============================================
+// API: BLACKLIST
+// ============================================
+app.get('/api/blacklist', requireAuth, (req, res) => {
+  return res.json({ blacklist: getBlacklist() });
+});
+
+app.post('/api/blacklist', requireApiOrSession, (req, res) => {
+  const { email, reason } = req.body;
+  if (!email) return res.status(400).json({ error: 'email required' });
+  const list = addToBlacklist(email, reason);
+  return res.json({ success: true, total: list.length });
+});
+
+app.delete('/api/blacklist/:email', requireAuth, (req, res) => {
+  const list = removeFromBlacklist(decodeURIComponent(req.params.email));
+  return res.json({ success: true, total: list.length });
+});
+
+// ============================================
+// API: CAMPAIGN CLONE
+// ============================================
+app.post('/api/campaigns/:id/clone', requireApiOrSession, (req, res) => {
+  const original = readCampaign(req.params.id);
+  if (!original) return res.status(404).json({ error: 'Campaign not found' });
+
+  const clone = createCampaignObject({
+    name: ((req.body && req.body.name) || original.name) + ' (Copy)',
+    description: original.description,
+    webhook_url: original.webhook_url,
+    schedule: JSON.parse(JSON.stringify(original.schedule)),
+    steps: original.steps.map(s => ({
+      subject_template: s.subject_template,
+      body_template: s.body_template,
+      delay_days: s.delay_days,
+      active: s.active
+    }))
+  });
+
+  writeCampaign(clone);
+  return res.json({ success: true, campaign: clone });
+});
+
+// ============================================
+// API: SEND TEST EMAIL (single lead, for testing)
+// ============================================
+app.post('/api/campaigns/:id/test-send', requireAuth, async (req, res) => {
+  const campaign = readCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  if (!campaign.webhook_url) return res.status(400).json({ error: 'No webhook URL configured' });
+
+  const { lead_id, step_number } = req.body;
+  if (!lead_id) return res.status(400).json({ error: 'lead_id required' });
+
+  const lead = readLead(lead_id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+  const step = campaign.steps.find(s => s.step_number === (step_number || 1));
+  if (!step) return res.status(400).json({ error: 'Step not found' });
+
+  const entry = campaign.leads.find(l => l.lead_id === lead_id) || {
+    lead_id,
+    email: (lead.emails || [])[0] || ''
+  };
+
+  const result = await campaignScheduler.fireEmailWebhook(campaign, entry, step, lead);
+
+  return res.json({
+    success: result ? result.success : false,
+    webhook_status: result ? result.status : null,
+    webhook_response: result ? result.body?.substring(0, 500) : null,
+    test: true
+  });
+});
+
+// ============================================
 // START SERVER
 // ============================================
 app.listen(PORT, '0.0.0.0', () => {
@@ -1519,6 +2102,10 @@ app.listen(PORT, '0.0.0.0', () => {
   │  Dashboard: http://localhost:${PORT}/        │
   │  API:       http://localhost:${PORT}/api/...  │
   │  Dev:       http://localhost:${PORT}/dev      │
+  │  Campaigns: http://localhost:${PORT}/campaigns │
   └─────────────────────────────────────────┘
   `);
+
+  // Resume active campaigns
+  campaignScheduler.resumeActiveCampaigns();
 });

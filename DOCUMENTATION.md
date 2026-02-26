@@ -282,3 +282,97 @@ Each webhook payload contains the `event_type` and a data object relevant to the
 -   **Kanban Drag-and-Drop:** Visually move leads between stages on the dashboard.
 
 This documentation provides a complete overview of the FlowTier Lead Management System. For any further questions, please refer to the source code or the Dev Console within the application.
+
+## 8. Campaign System
+
+This section details the automated email campaign system, a major feature for proactive lead outreach. The system is designed to work in tandem with an external automation platform like Make.com, which handles the AI-powered email generation and sending.
+
+### 8.1. Architecture & Flow
+
+The campaign workflow is orchestrated between the CRM and Make.com:
+
+1.  **Scheduling:** The CRM's internal scheduler checks every minute for campaigns that are due to send an email based on their defined frequency, time windows, and daily limits.
+2.  **Webhook (`campaign_email_due`):** When an email is due for a specific lead in a sequence, the CRM fires a `campaign_email_due` webhook to the campaign-specific URL defined in its settings. This payload contains all necessary data: the lead's details, the full conversation history, and the email templates for the current step.
+3.  **Make.com (Scenario 1 - Sending):**
+    *   A Make.com scenario is triggered by this webhook.
+    *   It uses an AI model (e.g., OpenAI) to generate a personalized email, using the provided lead data, conversation history, and templates as context.
+    *   It sends the email via a connected Gmail, Outlook, or SMTP account.
+    *   Upon successful sending, it makes a callback to the CRM's `/api/campaigns/:id/log-send` endpoint to record the send in the lead's activity timeline.
+4.  **Make.com (Scenario 2 - Receiving Replies):**
+    *   A separate Make.com scenario monitors the sending inbox for replies.
+    *   When a reply is detected, it parses the email content (sender, subject, body).
+    *   It posts the reply details to the CRM's `/api/campaigns/:id/reply` endpoint.
+5.  **CRM (Reply Handling):** The CRM receives the reply, logs it in the lead's conversation history, automatically pauses the sequence for that lead to prevent further automated follow-ups, and updates the lead's stage (e.g., to "Qualified").
+
+### 8.2. Campaign Data Model
+
+The core data object for a campaign.
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `String` | Unique UUIDv4 for the campaign. |
+| `name` | `String` | The name of the campaign. |
+| `description` | `String` | A short description of the campaign's purpose. |
+| `status` | `String` | Current status: `draft`, `active`, `paused`, `completed`. |
+| `webhook_url` | `String` | The Make.com webhook URL to which `campaign_email_due` events are sent. |
+| `schedule` | `Object` | Contains the scheduling rules. See Schedule Object below. |
+| `steps` | `Array<Object>` | The email sequence steps. See Step Object below. |
+| `leads` | `Array<Object>` | A list of leads enrolled in the campaign, tracking their progress. |
+| `stats` | `Object` | Analytics for the campaign (sends, replies, bounces, etc.). |
+| `created_at` | `String` | ISO 8601 timestamp of creation. |
+| `updated_at` | `String` | ISO 8601 timestamp of last update. |
+
+#### Schedule Object
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `frequency_minutes` | `Number` | The time in minutes to wait between sending emails to different leads. |
+| `time_windows` | `Array<Object>` | An array of `{start: "HH:MM", end: "HH:MM"}` objects defining allowed sending times. |
+| `timezone` | `String` | The IANA timezone for the schedule (e.g., "America/New_York"). |
+| `daily_limit` | `Number` | The maximum number of emails to send per day for this campaign. |
+| `days_of_week` | `Array<Number>` | Days of the week to send on (1=Monday, 7=Sunday). |
+
+#### Step Object
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `step_number` | `Number` | The order of the step in the sequence (1, 2, 3...). |
+| `subject_template` | `String` | The template for the email subject line. Supports `{{variable}}` placeholders. |
+| `body_template` | `String` | The template for the email body. Supports `{{variable}}` placeholders. |
+| `delay_days` | `Number` | The number of days to wait after the previous step before sending this one. |
+| `active` | `Boolean` | Whether this step is currently active. |
+
+### 8.3. Campaign Endpoints
+
+These endpoints manage the entire lifecycle of campaigns.
+
+- `POST /api/campaigns`: Create a new campaign.
+- `GET /api/campaigns`: List all campaigns.
+- `GET /api/campaigns/:id`: Get full details for a single campaign.
+- `PATCH /api/campaigns/:id`: Update a campaign's settings (name, schedule, etc.).
+- `DELETE /api/campaigns/:id`: Delete a campaign.
+- `POST /api/campaigns/:id/steps`: Add or update the email sequence steps for a campaign.
+- `POST /api/campaigns/:id/leads`: Enroll one or more leads into a campaign.
+- `DELETE /api/campaigns/:id/leads/:leadId`: Remove a lead from a campaign.
+- `POST /api/campaigns/:id/start`: Start or resume a campaign.
+- `POST /api/campaigns/:id/pause`: Pause an active campaign.
+- `POST /api/campaigns/:id/clone`: Duplicate an existing campaign.
+- `GET /api/campaigns/:id/analytics`: Retrieve detailed analytics for a campaign.
+
+### 8.4. Make.com Callback Endpoints
+
+These endpoints are designed to be called by your Make.com scenarios.
+
+- `POST /api/campaigns/:id/log-send`: **Callback from Make.com.** Logs that an email was successfully sent to a lead for a specific step.
+- `POST /api/campaigns/:id/reply`: **Callback from Make.com.** Logs a reply from a lead, pausing the sequence for them.
+- `POST /api/campaigns/:id/bounce`: **Callback from Make.com.** Logs a bounced email, marking the lead as invalid.
+- `POST /api/campaigns/:id/opt-out`: **Callback from Make.com.** Logs an unsubscribe request and adds the email to the global blacklist.
+
+### 8.5. Conversation History & Blacklist
+
+To provide full context to the AI agent and manage unsubscribes, two additional APIs are critical.
+
+- `GET /api/leads/:id/conversations`: Retrieves the complete, chronologically ordered history of all messages sent and received for a specific lead. This is essential context for the AI to generate relevant and human-like follow-ups.
+- `GET /api/blacklist`: Retrieves the list of all blacklisted email addresses.
+- `POST /api/blacklist`: Adds a new email to the global blacklist.
+- `DELETE /api/blacklist/:email`: Removes an email from the blacklist.
