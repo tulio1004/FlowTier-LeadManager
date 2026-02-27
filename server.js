@@ -561,6 +561,33 @@ app.get('/api/leads/lookup', (req, res) => {
   }
 });
 
+// Email exact-match search — returns full lead object when email matches exactly
+app.get('/api/leads/by-email', requireApiOrSession, (req, res) => {
+  const email = (req.query.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email parameter is required' });
+  }
+
+  try {
+    const allLeads = getAllLeads();
+    const match = allLeads.find(l => {
+      const emails = (l.emails || []).flat(Infinity)
+        .map(e => typeof e === 'string' ? e.trim().toLowerCase() : '');
+      return emails.includes(email);
+    });
+
+    if (!match) {
+      return res.json({ found: false, lead: null });
+    }
+
+    match.lead_score = calculateLeadScore(match);
+    return res.json({ found: true, lead: match });
+  } catch (err) {
+    console.error('[ByEmail] Error:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Public lead search (for Proposal Builder import — limited data, CORS enabled)
 app.get('/api/leads/search', (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');

@@ -435,11 +435,53 @@ PATCH /api/leads/abc-123
   "lead_id": "abc-123-def-456",
   "contact_name": "Sarah Mitchell",
   "company_name": "Brightside Dental",
-  "stage": "qualified"
+  "stage": "qualified",
+  "human_mode": false
 }
 
 // Response when not found:
 { "found": false }</div>
+          </div>
+
+          <div class="endpoint-card" style="border-left:3px solid #f59e0b;">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/leads/by-email?email=...</span>
+              <span style="color:#f59e0b;font-size:0.75rem;margin-left:8px;">EMAIL EXACT MATCH</span>
+            </div>
+            <div class="endpoint-desc"><strong>Authenticated endpoint</strong> &mdash; Search for a lead by exact email match. Returns the <strong>full lead object</strong> (all fields, notes, activity, etc.) when found. The match is case-insensitive and works even if the lead has multiple emails &mdash; matching any one of them is enough. Returns at most one lead.</div>
+            <table class="field-table">
+              <thead><tr><th>Query Param</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>email</code></td><td>string</td><td>Exact email address to match (case-insensitive). Must be a valid email with @.</td></tr>
+              </tbody>
+            </table>
+            <div class="code-block">// Request:
+GET /api/leads/by-email?email=sarah@brightsidedental.com
+
+// Response when found (full lead object):
+{
+  "found": true,
+  "lead": {
+    "id": "abc-123-def-456",
+    "company_name": "Brightside Dental",
+    "contact_name": "Sarah Mitchell",
+    "emails": ["sarah@brightsidedental.com", "info@brightsidedental.com"],
+    "phones": ["+1 555-123-4567"],
+    "stage": "qualified",
+    "human_mode": false,
+    "lead_score": 65,
+    "deal_value": 5000,
+    ... // all lead fields
+  }
+}
+
+// Response when not found:
+{ "found": false, "lead": null }
+
+// Response on invalid email:
+// HTTP 400
+{ "error": "Valid email parameter is required" }</div>
           </div>
 
           <div class="endpoint-card" style="border-left:3px solid #8b5cf6;">
