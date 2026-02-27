@@ -549,16 +549,21 @@ PATCH /api/leads/{{lead_id}}
               <span class="method-badge post">POST</span>
               <span class="endpoint-path">/api/leads/:id/outreach</span>
             </div>
-            <div class="endpoint-desc">Log an outreach interaction. Triggers <code>lead_outreach_logged</code> webhook. Auto-moves Cold leads to Contacted.</div>
+            <div class="endpoint-desc">Log an outreach interaction. Requires <code>direction</code> and <code>body</code>. Include <code>from_email</code> and <code>to_email</code> to track which email addresses are involved. Auto-moves Cold leads to Contacted when direction is "sent".</div>
             <div class="code-block">{
   "direction": "sent",
   "channel": "email",
   "subject": "Introduction - AI Automation for Your Business",
-  "body": "Hi Sarah, I wanted to reach out about how we can help..."
+  "body": "Hi Sarah, I wanted to reach out about how we can help...",
+  "from_email": "tulio@flowtier.io",
+  "to_email": "sarah@brightsidedental.com"
 }
 
-// direction: "sent" or "received"
-// channel: "email", "sms", "call", "linkedin", "other"</div>
+// direction: "sent" or "received" (required)
+// body: message content (required)
+// channel: "email", "sms", "call", "instagram", "other"
+// from_email: sender's email address
+// to_email: recipient's email address</div>
           </div>
 
           <div class="endpoint-card">
@@ -566,7 +571,91 @@ PATCH /api/leads/{{lead_id}}
               <span class="method-badge get">GET</span>
               <span class="endpoint-path">/api/leads/:id/outreach</span>
             </div>
-            <div class="endpoint-desc">Get all outreach entries for a lead, sorted by date (newest first).</div>
+            <div class="endpoint-desc">Get all outreach for a lead, <strong>grouped by email thread</strong>. Each thread contains the full conversation history for one email address, sorted chronologically.</div>
+            <div class="code-block">// Response:
+{
+  "outreach": [
+    {
+      "email": "sarah@brightsidedental.com",
+      "message_count": 4,
+      "last_message_at": "2026-02-27T15:30:00.000Z",
+      "messages": [
+        {
+          "direction": "sent",
+          "channel": "email",
+          "subject": "Introduction",
+          "body": "Hi Sarah...",
+          "from_email": "tulio@flowtier.io",
+          "to_email": "sarah@brightsidedental.com",
+          "timestamp": "2026-02-25T10:00:00.000Z"
+        },
+        {
+          "direction": "received",
+          "channel": "email",
+          "subject": "Re: Introduction",
+          "body": "Thanks for reaching out...",
+          "from_email": "sarah@brightsidedental.com",
+          "to_email": "tulio@flowtier.io",
+          "timestamp": "2026-02-26T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "email": "info@brightsidedental.com",
+      "message_count": 1,
+      "last_message_at": "2026-02-20T12:00:00.000Z",
+      "messages": [ ... ]
+    }
+  ]
+}</div>
+          </div>
+
+          <div class="endpoint-card" style="border-left:3px solid #f59e0b;">
+            <div class="endpoint-header">
+              <span class="method-badge get">GET</span>
+              <span class="endpoint-path">/api/outreach/by-email?email=...</span>
+              <span style="color:#f59e0b;font-size:0.75rem;margin-left:8px;">CONVERSATION SEARCH</span>
+            </div>
+            <div class="endpoint-desc"><strong>Search all outreach history for a specific email address.</strong> Finds every sent/received message involving that email across all leads. Returns the full conversation thread plus basic lead info. Exact match, case-insensitive.</div>
+            <table class="field-table">
+              <thead><tr><th>Query Param</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>email</code></td><td>string</td><td>Exact email address to search for in from_email and to_email fields</td></tr>
+              </tbody>
+            </table>
+            <div class="code-block">// Request:
+GET /api/outreach/by-email?email=sarah@brightsidedental.com
+
+// Response:
+{
+  "email": "sarah@brightsidedental.com",
+  "found": true,
+  "leads": [
+    {
+      "lead_id": "abc-123",
+      "contact_name": "Sarah Mitchell",
+      "company_name": "Brightside Dental",
+      "stage": "qualified",
+      "human_mode": false,
+      "messages": [
+        {
+          "direction": "sent",
+          "channel": "email",
+          "subject": "Introduction",
+          "body": "Hi Sarah...",
+          "from_email": "tulio@flowtier.io",
+          "to_email": "sarah@brightsidedental.com",
+          "timestamp": "2026-02-25T10:00:00.000Z"
+        },
+        ...
+      ],
+      "message_count": 4,
+      "last_message_at": "2026-02-27T15:30:00.000Z"
+    }
+  ],
+  "total_leads": 1,
+  "total_messages": 4
+}</div>
           </div>
 
           <div class="endpoint-card">
@@ -574,7 +663,7 @@ PATCH /api/leads/{{lead_id}}
               <span class="method-badge delete">DELETE</span>
               <span class="endpoint-path">/api/leads/:id/outreach/:outreachId</span>
             </div>
-            <div class="endpoint-desc">Delete an outreach entry.</div>
+            <div class="endpoint-desc">Delete an outreach entry by its internal ID.</div>
           </div>
         </div>
 

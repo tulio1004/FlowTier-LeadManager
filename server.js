@@ -581,6 +581,7 @@ app.get('/api/leads/by-email', requireApiOrSession, (req, res) => {
     }
 
     match.lead_score = calculateLeadScore(match);
+    match.outreach = groupOutreachByThread(match.outreach);
     return res.json({ found: true, lead: match });
   } catch (err) {
     console.error('[ByEmail] Error:', err.message);
@@ -705,11 +706,38 @@ app.get('/api/leads/check-duplicate', requireApiOrSession, (req, res) => {
   return res.json({ duplicate: false });
 });
 
+// Helper: clean and group outreach by email thread
+function groupOutreachByThread(rawOutreach) {
+  const cleaned = (rawOutreach || []).map(o => {
+    const { _id, id, template_name, ...clean } = o;
+    return clean;
+  });
+
+  const threads = {};
+  cleaned.forEach(o => {
+    const threadEmail = o.direction === 'sent' ? (o.to_email || 'unknown') : (o.from_email || 'unknown');
+    if (!threads[threadEmail]) {
+      threads[threadEmail] = { email: threadEmail, messages: [] };
+    }
+    threads[threadEmail].messages.push(o);
+  });
+
+  Object.values(threads).forEach(t => {
+    t.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    t.message_count = t.messages.length;
+    t.last_message_at = t.messages[t.messages.length - 1].timestamp;
+  });
+
+  return Object.values(threads).sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+}
+
 // Get single lead
 app.get('/api/leads/:id', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
   lead.lead_score = calculateLeadScore(lead);
+  // Restructure outreach into email threads
+  lead.outreach = groupOutreachByThread(lead.outreach);
   return res.json(lead);
 });
 
@@ -984,30 +1012,84 @@ app.delete('/api/leads/:id/notes/:noteId', requireAuth, (req, res) => {
 });
 
 // ============================================
+// API: OUTREACH — SEARCH BY EMAIL
+// ============================================
+app.get('/api/outreach/by-email', requireApiOrSession, (req, res) => {
+  const email = (req.query.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email parameter is required' });
+  }
+
+  try {
+    const allLeads = getAllLeads();
+    const results = [];
+
+    allLeads.forEach(lead => {
+      const rawOutreach = lead.outreach || [];
+      // Find all messages where from_email or to_email matches exactly
+      const matching = rawOutreach.filter(o => {
+        const from = (o.from_email || '').trim().toLowerCase();
+        const to = (o.to_email || '').trim().toLowerCase();
+        return from === email || to === email;
+      }).map(o => {
+        const { _id, id, template_name, ...clean } = o;
+        return clean;
+      }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+      if (matching.length > 0) {
+        results.push({
+          lead_id: lead.id,
+          contact_name: lead.contact_name || '',
+          company_name: lead.company_name || '',
+          stage: lead.stage || '',
+          human_mode: lead.human_mode === true,
+          messages: matching,
+          message_count: matching.length,
+          last_message_at: matching[matching.length - 1].timestamp
+        });
+      }
+    });
+
+    // Sort by most recent conversation first
+    results.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+
+    return res.json({
+      email: email,
+      found: results.length > 0,
+      leads: results,
+      total_leads: results.length,
+      total_messages: results.reduce((sum, r) => sum + r.message_count, 0)
+    });
+  } catch (err) {
+    console.error('[OutreachByEmail] Error:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
 // API: OUTREACH TRACKING
 // ============================================
 app.get('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
-  return res.json({ outreach: lead.outreach || [] });
+  return res.json({ outreach: groupOutreachByThread(lead.outreach) });
 });
 
 app.post('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-  const { direction, subject, body, channel, template_name, from_email, to_email } = req.body;
+  const { direction, subject, body, channel, from_email, to_email } = req.body;
   if (!direction || !body) return res.status(400).json({ error: 'direction and body required' });
 
   const entry = {
-    id: uuidv4(),
+    _id: uuidv4(), // internal only, not exposed in API responses
     direction: direction, // 'sent' or 'received'
     channel: channel || 'email',
     subject: subject || '',
     body: body,
     from_email: from_email || '',
     to_email: to_email || '',
-    template_name: template_name || '',
     timestamp: new Date().toISOString()
   };
 
@@ -1018,7 +1100,7 @@ app.post('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
   lead.activity.push({
     type: 'outreach',
     message: `${direction === 'sent' ? 'Email sent' : 'Email received'}: ${subject || '(no subject)'}`,
-    outreach_id: entry.id,
+    outreach_id: entry._id,
     timestamp: entry.timestamp
   });
 
@@ -1033,14 +1115,16 @@ app.post('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
   lead.lead_score = calculateLeadScore(lead);
   writeLead(lead);
 
-  return res.json({ success: true, outreach: entry });
+  // Strip internal _id from response
+  const { _id, ...cleanEntry } = entry;
+  return res.json({ success: true, outreach: cleanEntry });
 });
 
 app.delete('/api/leads/:id/outreach/:outreachId', requireAuth, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
   if (!lead.outreach) return res.status(404).json({ error: 'Outreach not found' });
-  lead.outreach = lead.outreach.filter(o => o.id !== req.params.outreachId);
+  lead.outreach = lead.outreach.filter(o => (o._id || o.id) !== req.params.outreachId);
   lead.updated_at = new Date().toISOString();
   writeLead(lead);
   return res.json({ success: true });
@@ -1869,7 +1953,7 @@ app.post('/api/campaigns/:id/log-send', requireApiOrSession, (req, res) => {
   if (lead) {
     if (!lead.outreach) lead.outreach = [];
     lead.outreach.unshift({
-      id: uuidv4(),
+      _id: uuidv4(),
       direction: 'sent',
       channel: 'email',
       subject: subject || '',
@@ -1935,7 +2019,7 @@ app.post('/api/campaigns/:id/reply', requireApiOrSession, (req, res) => {
   if (lead) {
     if (!lead.outreach) lead.outreach = [];
     lead.outreach.unshift({
-      id: uuidv4(),
+      _id: uuidv4(),
       direction: 'received',
       channel: 'email',
       subject: subject || '',
@@ -2093,20 +2177,8 @@ app.get('/api/leads/:id/conversations', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-  // Combine outreach into chronological conversation
-  const conversations = (lead.outreach || [])
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-    .map(o => ({
-      direction: o.direction,
-      channel: o.channel,
-      subject: o.subject,
-      body: o.body,
-      from_email: o.from_email,
-      to_email: o.to_email,
-      campaign_id: o.campaign_id || null,
-      campaign_step: o.campaign_step || null,
-      timestamp: o.timestamp
-    }));
+  // Group outreach into email threads
+  const conversations = groupOutreachByThread(lead.outreach);
 
   // Include notes for context
   const notes = (lead.notes || []).map(n => ({
@@ -2125,10 +2197,12 @@ app.get('/api/leads/:id/conversations', requireApiOrSession, (req, res) => {
     industry: lead.industry,
     website: lead.website,
     stage: lead.stage,
+    human_mode: lead.human_mode === true,
     details: lead.details,
     conversations,
     notes,
-    total_messages: conversations.length
+    total_threads: conversations.length,
+    total_messages: conversations.reduce((sum, t) => sum + t.message_count, 0)
   });
 });
 

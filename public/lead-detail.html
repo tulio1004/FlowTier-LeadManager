@@ -275,6 +275,16 @@
             </select>
           </div>
         </div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label>From Email</label>
+            <input type="email" id="outreachFromEmail" placeholder="sender@example.com">
+          </div>
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label>To Email</label>
+            <input type="email" id="outreachToEmail" placeholder="recipient@example.com">
+          </div>
+        </div>
         <div class="form-group">
           <label>Subject</label>
           <input type="text" id="outreachSubject" placeholder="Email subject or message topic">
@@ -586,21 +596,32 @@
         return;
       }
 
-      list.innerHTML = lead.outreach.map(o => `
-        <div class="outreach-item" onclick="viewOutreach('${o.id}')">
-          <div class="outreach-item-header">
-            <span class="outreach-direction ${o.direction}">${o.direction === 'sent' ? '&#8593; Sent' : '&#8595; Received'}</span>
-            <span class="outreach-subject">${esc(o.subject || '(no subject)')}</span>
-            <span class="outreach-time">${o.channel || 'email'} &middot; ${formatDate(o.timestamp)}</span>
-          </div>
-        </div>
-      `).join('');
+      // lead.outreach is now an array of threads grouped by email
+      let html = '';
+      lead.outreach.forEach((thread, ti) => {
+        html += `<div style="margin-bottom:16px;">`;
+        html += `<div style="font-size:0.75rem;font-weight:700;color:var(--color-primary);padding:6px 0;border-bottom:1px solid var(--color-border-light);margin-bottom:6px;">&#128231; ${esc(thread.email)} <span style="color:var(--color-text-muted);font-weight:400;">&middot; ${thread.message_count} message${thread.message_count !== 1 ? 's' : ''}</span></div>`;
+        thread.messages.forEach((o, mi) => {
+          html += `
+            <div class="outreach-item" onclick="viewOutreachMsg(${ti},${mi})">
+              <div class="outreach-item-header">
+                <span class="outreach-direction ${o.direction}">${o.direction === 'sent' ? '&#8593; Sent' : '&#8595; Received'}</span>
+                <span class="outreach-subject">${esc(o.subject || '(no subject)')}</span>
+                <span class="outreach-time">${o.channel || 'email'} &middot; ${formatDate(o.timestamp)}</span>
+              </div>
+            </div>`;
+        });
+        html += `</div>`;
+      });
+      list.innerHTML = html;
     }
 
     function openOutreachModal() {
       document.getElementById('outreachModal').classList.add('active');
       document.getElementById('outreachSubject').value = '';
       document.getElementById('outreachBody').value = '';
+      document.getElementById('outreachFromEmail').value = '';
+      document.getElementById('outreachToEmail').value = '';
       document.getElementById('outreachDirection').value = 'sent';
       document.getElementById('outreachChannel').value = 'email';
     }
@@ -614,13 +635,15 @@
       const channel = document.getElementById('outreachChannel').value;
       const subject = document.getElementById('outreachSubject').value.trim();
       const body = document.getElementById('outreachBody').value.trim();
+      const from_email = document.getElementById('outreachFromEmail').value.trim();
+      const to_email = document.getElementById('outreachToEmail').value.trim();
 
       if (!body) { showToast('Please enter the outreach content', 'error'); return; }
 
       await fetch(`/api/leads/${leadId}/outreach`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ direction, channel, subject, body })
+        body: JSON.stringify({ direction, channel, subject, body, from_email, to_email })
       });
 
       closeOutreachModal();
@@ -628,8 +651,10 @@
       await loadLead();
     }
 
-    function viewOutreach(outreachId) {
-      const o = lead.outreach.find(x => x.id === outreachId);
+    function viewOutreachMsg(threadIdx, msgIdx) {
+      const thread = lead.outreach[threadIdx];
+      if (!thread) return;
+      const o = thread.messages[msgIdx];
       if (!o) return;
 
       document.getElementById('outreachViewTitle').textContent =
@@ -639,17 +664,14 @@
           <span class="outreach-direction ${o.direction}" style="margin-right:8px;">${o.direction === 'sent' ? '&#8593; Sent' : '&#8595; Received'}</span>
           <span style="color:var(--color-text-muted);font-size:0.75rem;">${o.channel || 'email'} &middot; ${formatDate(o.timestamp)}</span>
         </div>
+        ${o.from_email ? `<div style="font-size:0.8125rem;color:var(--color-text-secondary);margin-bottom:4px;"><strong>From:</strong> ${esc(o.from_email)}</div>` : ''}
+        ${o.to_email ? `<div style="font-size:0.8125rem;color:var(--color-text-secondary);margin-bottom:8px;"><strong>To:</strong> ${esc(o.to_email)}</div>` : ''}
         ${o.subject ? `<div style="font-weight:600;margin-bottom:8px;">Subject: ${esc(o.subject)}</div>` : ''}
         <div style="white-space:pre-wrap;">${esc(o.body)}</div>
       `;
 
-      document.getElementById('outreachViewDeleteBtn').onclick = async () => {
-        if (!confirm('Delete this outreach entry?')) return;
-        await fetch(`/api/leads/${leadId}/outreach/${outreachId}`, { method: 'DELETE' });
-        closeOutreachViewModal();
-        showToast('Outreach deleted', 'success');
-        await loadLead();
-      };
+      // Hide delete button for threaded view (use the outreach management for deletion)
+      document.getElementById('outreachViewDeleteBtn').style.display = 'none';
 
       document.getElementById('outreachViewModal').classList.add('active');
     }
