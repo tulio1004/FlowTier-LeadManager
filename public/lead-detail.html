@@ -45,6 +45,7 @@
         <div class="header-actions">
           <span class="score-badge" id="leadScoreBadge" style="font-size:0.8125rem;padding:5px 14px;">0</span>
           <select class="filter-select" id="stageSelect" style="font-weight:600;"></select>
+          <button class="btn btn-sm" id="humanModeBtn" onclick="toggleHumanMode()" title="Toggle Human Mode — when ON, AI outreach is paused for this lead" style="font-size:0.75rem;padding:5px 12px;border-radius:6px;cursor:pointer;transition:all 0.2s;">&#129302; AI Mode</button>
           <a href="#" class="btn btn-secondary btn-sm" id="proposalBtn" title="Create Proposal">&#128196; Create Proposal</a>
           <a href="#" class="btn btn-secondary btn-sm" id="editBtn">&#9998; Edit</a>
           <button class="btn btn-danger btn-sm" id="deleteBtn">&#128465; Delete</button>
@@ -406,6 +407,9 @@
       stageSelect.innerHTML = stages.map(s =>
         `<option value="${s.id}" ${lead.stage === s.id ? 'selected' : ''}>${s.label}</option>`
       ).join('');
+
+      // Human Mode toggle button
+      renderHumanModeBtn();
 
       // Contact info — flatten nested arrays
       const websiteUrl = lead.website ? (lead.website.startsWith('http') ? lead.website : 'https://' + lead.website) : '';
@@ -875,6 +879,53 @@
       const days = Math.floor(hrs / 24);
       if (days < 30) return days + 'd ago';
       return new Date(dateStr).toLocaleDateString();
+    }
+
+    // ════════════════════════════════════════
+    // HUMAN MODE TOGGLE
+    // ════════════════════════════════════════
+    function renderHumanModeBtn() {
+      const btn = document.getElementById('humanModeBtn');
+      if (!btn) return;
+      const isHuman = lead.human_mode === true;
+      if (isHuman) {
+        btn.innerHTML = '&#9995; Human Mode';
+        btn.style.background = '#FF9800';
+        btn.style.color = '#fff';
+        btn.style.border = '2px solid #E65100';
+        btn.title = 'Human Mode ON — AI outreach is paused. Click to switch back to AI Mode.';
+      } else {
+        btn.innerHTML = '&#129302; AI Mode';
+        btn.style.background = 'var(--color-bg-card, #1e1e2e)';
+        btn.style.color = 'var(--color-text-muted, #aaa)';
+        btn.style.border = '2px solid var(--color-border, #333)';
+        btn.title = 'AI Mode — AI outreach is active. Click to take over manually.';
+      }
+    }
+
+    async function toggleHumanMode() {
+      const newValue = !(lead.human_mode === true);
+      const btn = document.getElementById('humanModeBtn');
+      btn.style.opacity = '0.5';
+
+      try {
+        const res = await fetch('/api/leads/' + leadId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ human_mode: newValue })
+        });
+        const data = await res.json();
+        if (data.success) {
+          lead.human_mode = newValue;
+          renderHumanModeBtn();
+          showToast(newValue ? 'Human Mode ON — AI outreach paused for this lead' : 'AI Mode ON — AI outreach resumed for this lead');
+        } else {
+          showToast('Failed to update mode', true);
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      }
+      btn.style.opacity = '1';
     }
 
     // ════════════════════════════════════════

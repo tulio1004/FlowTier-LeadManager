@@ -260,6 +260,7 @@ function createLeadObject(data) {
     attachments: Array.isArray(data.attachments) ? data.attachments : [],
     custom_fields: data.custom_fields || {},
     activity: Array.isArray(data.activity) ? data.activity : [],
+    human_mode: data.human_mode === true ? true : false,
     lead_score: 0,
     created_at: data.created_at || now,
     updated_at: now,
@@ -549,7 +550,8 @@ app.get('/api/leads/lookup', (req, res) => {
         lead_id: match.id,
         contact_name: match.contact_name || '',
         company_name: match.company_name || '',
-        stage: match.stage || ''
+        stage: match.stage || '',
+        human_mode: match.human_mode === true
       });
     }
     return res.json({ found: false });
@@ -584,7 +586,8 @@ app.get('/api/leads/search', (req, res) => {
         email: (l.emails || []).flat(Infinity).find(e => typeof e === 'string' && e.includes('@')) || '',
         phone: (l.phones || []).flat(Infinity).find(p => typeof p === 'string') || '',
         stage: l.stage || 'cold',
-        industry: l.industry || ''
+        industry: l.industry || '',
+        human_mode: l.human_mode === true
       }))
     });
   } catch (err) {
@@ -775,7 +778,7 @@ app.patch('/api/leads/:id', requireApiOrSession, (req, res) => {
     // Merge fields
     const fields = ['company_name', 'contact_name', 'emails', 'phones', 'website', 'linkedin',
       'address', 'industry', 'company_size', 'revenue_estimate', 'lead_source', 'tags',
-      'stage', 'assigned_to', 'deal_value', 'details', 'next_followup', 'proposal_url', 'custom_fields'];
+      'stage', 'assigned_to', 'deal_value', 'details', 'next_followup', 'proposal_url', 'custom_fields', 'human_mode'];
 
     fields.forEach(f => {
       if (data[f] !== undefined) existing[f] = data[f];
