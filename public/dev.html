@@ -272,7 +272,7 @@
             <div class="test-card-title">&#128233; campaign_email_due</div>
             <button class="btn btn-primary btn-sm" onclick="testWebhook('campaign_email_due')">Send Test</button>
           </div>
-          <div class="test-card-desc">Fired when a campaign email is due to be sent. Contains lead data, email template, step info, and callback URL for Make.com.</div>
+          <div class="test-card-desc">Fired when a campaign email is due to be sent. Contains lead data, email template, step info, and callback URLs. <strong>Make.com should respond with a JSON body</strong> containing the actual email sent (status, subject_sent, email_sent, from_email). The system uses the webhook response to confirm delivery and log the real email content. You can also still use the callback_urls separately if preferred.</div>
           <button class="payload-toggle" onclick="togglePayload('campaign_email_due')">Show Payload &#9660;</button>
           <div class="code-block" id="payload_campaign_email_due" style="display:none;"></div>
           <div class="test-result" id="result_campaign_email_due"></div>
@@ -966,14 +966,25 @@ Body:
               <span class="method-badge post">POST</span>
               <span class="endpoint-path">/api/campaigns/:id/log-send</span>
             </div>
-            <div class="endpoint-desc"><strong>Callback from Make.com</strong> — Log that an email was successfully sent. This marks the lead as "sent" for the current step and records the email in outreach history.</div>
+            <div class="endpoint-desc"><strong>Callback from Make.com (optional)</strong> — Log that an email was successfully sent. <em>Note: You can also use the webhook response instead of this callback.</em> This marks the lead as "sent" for the current step and records the email in outreach history.</div>
             <div class="code-block">{
   "lead_id": "uuid-of-lead",
   "step_number": 1,
   "subject": "Rodrigues Flooring - AI Automation Opportunity",
   "body": "Hi Lenny, I noticed Rodrigues Flooring is growing fast...",
   "from_email": "tulio@flowtier.io"
-}</div>
+}
+
+// --- OR use Webhook Response (preferred) ---
+// When Make.com receives campaign_email_due, respond with:
+{
+  "status": "sent",
+  "subject_sent": "Rodrigues Flooring - AI Automation Opportunity",
+  "email_sent": "Hi Lenny, I noticed Rodrigues Flooring is growing fast...",
+  "from_email": "tulio@flowtier.io"
+}
+// The system will automatically log the send and
+// record the actual AI-personalized email content.</div>
           </div>
 
           <div class="endpoint-card">
@@ -1349,7 +1360,18 @@ Body:
           details: 'Family dental practice, 3 locations, interested in AI chatbot',
           conversation_history: []
         },
-        callback_url: 'https://leads.flowtier.io/api/campaigns/camp-test/log-send'
+        callback_urls: {
+          log_send: '/api/campaigns/camp-test/log-send',
+          log_reply: '/api/campaigns/camp-test/reply',
+          log_bounce: '/api/campaigns/camp-test/bounce'
+        },
+        _webhook_response_format: {
+          _note: 'Make.com should respond to this webhook with the JSON below. The system will use the response to confirm the send and log the actual email content.',
+          status: 'sent',
+          subject_sent: 'Brightside Dental - AI Automation Opportunity',
+          email_sent: 'Hi Sarah, I noticed Brightside Dental is growing fast in Dental. We help companies like yours automate their operations with AI...',
+          from_email: 'tulio@flowtier.io'
+        }
       },
       campaign_reply_received: {
         event: 'campaign_reply_received',

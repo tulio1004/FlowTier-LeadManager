@@ -330,6 +330,15 @@ class CampaignScheduler {
 
       const text = await response.text();
 
+      // Try to parse webhook response as JSON
+      // Make.com can respond with send confirmation data
+      let responseData = null;
+      try {
+        responseData = JSON.parse(text);
+      } catch (e) {
+        // Not JSON — that's fine, just use HTTP status
+      }
+
       if (this.addWebhookHistory) {
         this.addWebhookHistory({
           id: uuidv4(),
@@ -344,7 +353,7 @@ class CampaignScheduler {
         });
       }
 
-      return { success: response.ok, status: response.status, body: text };
+      return { success: response.ok, status: response.status, body: text, data: responseData };
     } catch (err) {
       console.error(`[Campaign] Webhook error for ${campaign.id}:`, err.message);
       if (this.addWebhookHistory) {
@@ -415,6 +424,19 @@ class CampaignScheduler {
     const result = await this.fireEmailWebhook(campaign, entry, step, leadData);
 
     if (result && result.success) {
+      // Parse webhook response data from Make.com
+      // Make.com can respond with: { "status": "sent", "email_sent": "actual email body", "subject_sent": "actual subject" }
+      const responseData = result.data || {};
+      const webhookStatus = (responseData.status || 'sent').toLowerCase();
+
+      // If Make.com explicitly says it failed, don't mark as sent
+      if (webhookStatus === 'failed' || webhookStatus === 'error') {
+        console.error(`[Campaign] ${campaign.name}: Make.com reported failure for ${entry.email}:`, responseData.error || 'Unknown error');
+        entry.error = responseData.error || 'Send failed (reported by Make.com)';
+        writeCampaign(campaign);
+        return;
+      }
+
       // Update campaign lead entry
       entry.last_sent_at = new Date().toISOString();
       entry.sent_count = (entry.sent_count || 0) + 1;
@@ -430,6 +452,12 @@ class CampaignScheduler {
         entry.status = 'completed'; // all steps done
       }
 
+      // Use actual email content from Make.com response if available
+      // This captures the AI-personalized version that was actually sent
+      const actualSubject = responseData.subject_sent || responseData.subject || step.subject_template || `Campaign: ${campaign.name} - Step ${step.step_number}`;
+      const actualBody = responseData.email_sent || responseData.body || responseData.email_body || step.body_template || '';
+      const fromEmail = responseData.from_email || responseData.sender || '';
+
       // Update campaign stats
       campaign.stats.emails_sent++;
       campaign.stats.sends_today++;
@@ -437,15 +465,15 @@ class CampaignScheduler {
 
       writeCampaign(campaign);
 
-      // Log outreach on the lead
+      // Log outreach on the lead with the ACTUAL email content
       if (!leadData.outreach) leadData.outreach = [];
       leadData.outreach.unshift({
         id: uuidv4(),
         direction: 'sent',
         channel: 'email',
-        subject: step.subject_template || `Campaign: ${campaign.name} - Step ${step.step_number}`,
-        body: step.body_template || '',
-        from_email: '',
+        subject: actualSubject,
+        body: actualBody,
+        from_email: fromEmail,
         to_email: entry.email,
         template_name: `${campaign.name} - Step ${step.step_number}`,
         campaign_id: campaign.id,
@@ -464,6 +492,8 @@ class CampaignScheduler {
       leadData.last_contacted = new Date().toISOString();
       leadData.updated_at = new Date().toISOString();
       this.writeLead(leadData);
+
+      console.log(`[Campaign] ${campaign.name}: Step ${step.step_number} confirmed sent to ${entry.email}${responseData.subject_sent ? ' (AI-personalized)' : ''}`);
     } else {
       console.error(`[Campaign] ${campaign.name}: Webhook failed for ${entry.email}`);
       // Don't mark as failed — will retry on next tick
