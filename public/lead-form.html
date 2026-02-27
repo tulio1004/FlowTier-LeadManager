@@ -530,7 +530,7 @@
       if (res.ok) {
         showToast(editMode ? 'Lead updated!' : 'Lead created!', 'success');
         setTimeout(() => {
-          window.location.href = '/lead/' + (data.id || editId);
+          window.location.href = '/lead/' + (data.id || (data.lead && data.lead.id) || editId);
         }, 500);
       } else {
         showToast(data.error || 'Failed to save', 'error');
