@@ -893,11 +893,56 @@
             <a href="https://proposals.flowtier.io/builder/${esc(slug)}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:0.75rem;">&#9998; Edit in Builder</a>
             <span style="color:var(--color-text-muted);font-size:0.75rem;">${url}</span>
           </div>
+          <div id="proposalViewStats" style="margin-top:10px;font-size:0.8rem;color:var(--color-text-muted);">Loading view data...</div>
         `;
         linkBtn.textContent = '\u270E Change';
+
+        // Fetch view tracking data from the Proposal Builder
+        fetchProposalViews(slug);
       } else {
         content.innerHTML = '<div style="color:var(--color-text-muted);font-size:0.8125rem;">No proposal linked yet. Click "Create Proposal" above or link one manually.</div>';
         linkBtn.textContent = '\uD83D\uDD17 Link Proposal';
+      }
+    }
+
+    async function fetchProposalViews(slug) {
+      const statsEl = document.getElementById('proposalViewStats');
+      if (!statsEl) return;
+      try {
+        const proposalBase = lead.proposal_url.replace(/\/[^\/]*$/, '');
+        const resp = await fetch(`${proposalBase}/api/proposals/${encodeURIComponent(slug)}`);
+        if (!resp.ok) { statsEl.textContent = ''; return; }
+        const data = await resp.json();
+
+        const viewCount = data.view_count || 0;
+        const firstView = data.first_viewed_at;
+        const lastView = data.last_viewed_at;
+
+        if (viewCount === 0) {
+          statsEl.innerHTML = '<span style="color:var(--color-text-muted);">&#128065; Client has not opened this proposal yet</span>';
+          return;
+        }
+
+        let timeAgo = '';
+        if (lastView) {
+          const diff = Date.now() - new Date(lastView).getTime();
+          const mins = Math.floor(diff / 60000);
+          if (mins < 60) timeAgo = mins + 'm ago';
+          else if (mins < 1440) timeAgo = Math.floor(mins / 60) + 'h ago';
+          else timeAgo = Math.floor(mins / 1440) + 'd ago';
+        }
+
+        const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+
+        statsEl.innerHTML = `
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;">
+            <span style="font-weight:600;color:var(--color-primary);">&#128065; ${viewCount} client view${viewCount !== 1 ? 's' : ''}</span>
+            <span style="font-size:0.75rem;">First: ${fmtDate(firstView)}</span>
+            <span style="font-size:0.75rem;">Last: ${fmtDate(lastView)} (${timeAgo})</span>
+          </div>
+        `;
+      } catch (err) {
+        statsEl.textContent = '';
       }
     }
 
