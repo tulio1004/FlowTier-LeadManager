@@ -216,6 +216,17 @@ class CampaignScheduler {
         continue;
       }
 
+      // Skip leads in human mode (manual follow-up)
+      if (entry.lead_id && this.readLead) {
+        try {
+          const ld = this.readLead(entry.lead_id);
+          if (ld && ld.human_mode === true) {
+            console.log(`[Campaign] Skipping ${entry.email} — lead is in Human Mode`);
+            continue;
+          }
+        } catch (e) { /* ignore read errors */ }
+      }
+
       // Determine current step
       const currentStepNum = entry.current_step || 1;
       const step = campaign.steps.find(s => s.step_number === currentStepNum && s.active);
@@ -376,12 +387,17 @@ class CampaignScheduler {
   async processTick(campaignId) {
     const campaign = readCampaign(campaignId);
     if (!campaign || campaign.status !== 'active') {
+      console.log(`[Campaign] Tick skipped for ${campaignId}: ${!campaign ? 'campaign not found' : `status is "${campaign.status}" (not active)`}`);
       this.stopCampaign(campaignId);
       return;
     }
 
     // Check time window
     if (!this.isWithinTimeWindow(campaign)) {
+      const tz = campaign.schedule.timezone || 'America/New_York';
+      const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+      const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' });
+      console.log(`[Campaign] ${campaign.name}: Outside time window — now: ${dayFormatter.format(new Date())} ${formatter.format(new Date())}, allowed days: ${JSON.stringify(campaign.schedule.days_of_week)}, windows: ${JSON.stringify(campaign.schedule.time_windows)}`);
       return;
     }
 
@@ -404,6 +420,8 @@ class CampaignScheduler {
         writeCampaign(campaign);
         this.stopCampaign(campaignId);
         console.log(`[Campaign] ${campaign.name}: Completed — all leads processed`);
+      } else {
+        console.log(`[Campaign] ${campaign.name}: No eligible leads found. Lead statuses: ${campaign.leads.map(l => `${l.email}=${l.status}`).join(', ')}`);
       }
       return;
     }
@@ -511,9 +529,10 @@ class CampaignScheduler {
 
     const intervalMs = (campaign.schedule.frequency_minutes || 5) * 60 * 1000;
 
-    console.log(`[Campaign] Starting "${campaign.name}" — every ${campaign.schedule.frequency_minutes} min`);
+    console.log(`[Campaign] Starting "${campaign.name}" — every ${campaign.schedule.frequency_minutes} min, status: ${campaign.status}, leads: ${campaign.leads.length}, webhook: ${campaign.webhook_url ? 'configured' : 'MISSING'}, days: ${JSON.stringify(campaign.schedule.days_of_week)}, windows: ${JSON.stringify(campaign.schedule.time_windows)}`);
 
     // Run immediately once, then on interval
+    console.log(`[Campaign] Firing immediate first tick for "${campaign.name}"`);
     this.processTick(campaignId);
 
     const timer = setInterval(() => {
