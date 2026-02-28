@@ -342,10 +342,28 @@ class CampaignScheduler {
       const text = await response.text();
 
       // Try to parse webhook response as JSON
-      // Make.com can respond with send confirmation data
+      // Make.com can respond in multiple formats:
+      // 1. Direct object: { "status": "sent", "email_sent": "..." }
+      // 2. Array wrapper: [{ "body": "{...}", "status": 200 }]
       let responseData = null;
       try {
-        responseData = JSON.parse(text);
+        let parsed = JSON.parse(text);
+
+        // Unwrap array — Make.com often wraps responses in an array
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed = parsed[0];
+        }
+
+        // If the data is inside a "body" field as a string, parse it
+        if (parsed && typeof parsed.body === 'string') {
+          try {
+            parsed = JSON.parse(parsed.body);
+          } catch (e2) {
+            // body is not JSON, use the outer object
+          }
+        }
+
+        responseData = parsed;
       } catch (e) {
         // Not JSON — that's fine, just use HTTP status
       }
