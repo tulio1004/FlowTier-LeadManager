@@ -345,18 +345,7 @@ function checkAutoStageRules(lead, trigger) {
       timestamp: new Date().toISOString()
     });
 
-    sendWebhookNotification('lead_stage_changed', {
-      lead_id: lead.id,
-      company_name: lead.company_name,
-      contact_name: lead.contact_name,
-      emails: lead.emails,
-      phones: lead.phones,
-      industry: lead.industry,
-      old_stage: oldStage,
-      new_stage: lead.stage,
-      deal_value: lead.deal_value,
-      auto_rule: true
-    }).catch(err => console.error('[Webhook] Error:', err));
+    // Global webhook disabled — auto-stage webhook removed.
   }
 
   return changed;
@@ -758,17 +747,8 @@ app.post('/api/leads', requireApiOrSession, (req, res) => {
     writeLead(lead);
     console.log(`[${new Date().toISOString()}] Lead created: ${lead.id} (${lead.company_name})`);
 
-    sendWebhookNotification('lead_created', {
-      lead_id: lead.id,
-      company_name: lead.company_name,
-      contact_name: lead.contact_name,
-      emails: lead.emails,
-      phones: lead.phones,
-      industry: lead.industry,
-      stage: lead.stage,
-      lead_source: lead.lead_source,
-      deal_value: lead.deal_value
-    }).catch(err => console.error('[Webhook] Error:', err));
+    // Global webhook disabled — Dev Console webhook is test-only.
+    // Campaign webhooks fire independently via campaign.webhook_url.
 
     return res.json({ success: true, lead });
   } catch (err) {
@@ -851,17 +831,7 @@ app.patch('/api/leads/:id', requireApiOrSession, (req, res) => {
         timestamp: existing.updated_at
       });
 
-      sendWebhookNotification('lead_stage_changed', {
-        lead_id: existing.id,
-        company_name: existing.company_name,
-        contact_name: existing.contact_name,
-        emails: existing.emails,
-        phones: existing.phones,
-        industry: existing.industry,
-        old_stage: oldStage,
-        new_stage: existing.stage,
-        deal_value: existing.deal_value
-      }).catch(err => console.error('[Webhook] Error:', err));
+      // Global webhook disabled — stage change webhook removed.
     }
 
     existing.lead_score = calculateLeadScore(existing);
@@ -1225,13 +1195,7 @@ app.post('/api/leads/:id/calendar', requireApiOrSession, (req, res) => {
   lead.lead_score = calculateLeadScore(lead);
   writeLead(lead);
 
-  sendWebhookNotification('lead_call_booked', {
-    lead_id: lead.id,
-    company_name: lead.company_name,
-    contact_name: lead.contact_name,
-    emails: lead.emails,
-    calendar_event: lead.calendar_event
-  }).catch(err => console.error('[Webhook] Error:', err));
+  // Global webhook disabled — call booked webhook removed.
 
   return res.json({ success: true, calendar_event: lead.calendar_event });
 });
