@@ -696,11 +696,21 @@ app.get('/api/leads/check-duplicate', requireApiOrSession, (req, res) => {
 });
 
 // Helper: clean and group outreach by email thread
+function backfillOutreachIds(lead) {
+  // Persist _id on entries that don't have one, so delete works
+  let changed = false;
+  (lead.outreach || []).forEach(o => {
+    if (!o._id) {
+      o._id = uuidv4();
+      changed = true;
+    }
+  });
+  if (changed) writeLead(lead);
+}
+
 function groupOutreachByThread(rawOutreach) {
   const cleaned = (rawOutreach || []).map(o => {
     const { id, template_name, ...rest } = o;
-    // Ensure every entry has an _id (backfill for old entries)
-    if (!rest._id) rest._id = uuidv4();
     return rest;
   });
 
@@ -727,6 +737,8 @@ app.get('/api/leads/:id', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
   lead.lead_score = calculateLeadScore(lead);
+  // Backfill _id on old entries and persist
+  backfillOutreachIds(lead);
   // Restructure outreach into email threads
   lead.outreach = groupOutreachByThread(lead.outreach);
   return res.json(lead);
