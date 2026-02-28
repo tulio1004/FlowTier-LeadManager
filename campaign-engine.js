@@ -483,33 +483,32 @@ class CampaignScheduler {
 
       writeCampaign(campaign);
 
-      // Log outreach on the lead with the ACTUAL email content
-      if (!leadData.outreach) leadData.outreach = [];
-      leadData.outreach.unshift({
-        id: uuidv4(),
-        direction: 'sent',
-        channel: 'email',
-        subject: actualSubject,
-        body: actualBody,
-        from_email: fromEmail,
-        to_email: entry.email,
-        template_name: `${campaign.name} - Step ${step.step_number}`,
-        campaign_id: campaign.id,
-        campaign_step: step.step_number,
-        timestamp: new Date().toISOString()
-      });
+      // Log outreach ONLY if webhook response contains actual email content
+      if (responseData.email_sent || responseData.subject_sent) {
+        if (!leadData.outreach) leadData.outreach = [];
+        leadData.outreach.unshift({
+          _id: uuidv4(),
+          direction: 'sent',
+          channel: 'email',
+          subject: responseData.subject_sent || '',
+          body: responseData.email_sent || '',
+          from_email: responseData.from_email || '',
+          to_email: entry.email,
+          timestamp: new Date().toISOString()
+        });
 
-      if (!leadData.activity) leadData.activity = [];
-      leadData.activity.push({
-        type: 'outreach',
-        message: `Campaign "${campaign.name}" - Step ${step.step_number} email sent`,
-        campaign_id: campaign.id,
-        timestamp: new Date().toISOString()
-      });
+        if (!leadData.activity) leadData.activity = [];
+        leadData.activity.push({
+          type: 'outreach',
+          message: `Campaign "${campaign.name}" - Step ${step.step_number} email sent`,
+          campaign_id: campaign.id,
+          timestamp: new Date().toISOString()
+        });
 
-      leadData.last_contacted = new Date().toISOString();
-      leadData.updated_at = new Date().toISOString();
-      this.writeLead(leadData);
+        leadData.last_contacted = new Date().toISOString();
+        leadData.updated_at = new Date().toISOString();
+        this.writeLead(leadData);
+      }
 
       console.log(`[Campaign] ${campaign.name}: Step ${step.step_number} confirmed sent to ${entry.email}${responseData.subject_sent ? ' (AI-personalized)' : ''}`);
     } else {
