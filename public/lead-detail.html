@@ -670,8 +670,20 @@
         <div style="white-space:pre-wrap;">${esc(o.body)}</div>
       `;
 
-      // Hide delete button for threaded view (use the outreach management for deletion)
-      document.getElementById('outreachViewDeleteBtn').style.display = 'none';
+      // Show delete button if _id is available (authenticated users)
+      const deleteBtn = document.getElementById('outreachViewDeleteBtn');
+      if (o._id) {
+        deleteBtn.style.display = '';
+        deleteBtn.onclick = async () => {
+          if (!confirm('Delete this outreach entry? This cannot be undone.')) return;
+          await fetch(`/api/leads/${leadId}/outreach/${o._id}`, { method: 'DELETE' });
+          closeOutreachViewModal();
+          showToast('Outreach entry deleted', 'success');
+          await loadLead();
+        };
+      } else {
+        deleteBtn.style.display = 'none';
+      }
 
       document.getElementById('outreachViewModal').classList.add('active');
     }

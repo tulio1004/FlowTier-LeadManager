@@ -696,10 +696,14 @@ app.get('/api/leads/check-duplicate', requireApiOrSession, (req, res) => {
 });
 
 // Helper: clean and group outreach by email thread
-function groupOutreachByThread(rawOutreach) {
+function groupOutreachByThread(rawOutreach, includeInternalId = false) {
   const cleaned = (rawOutreach || []).map(o => {
-    const { _id, id, template_name, ...clean } = o;
-    return clean;
+    const { id, template_name, ...rest } = o;
+    if (!includeInternalId) {
+      const { _id, ...clean } = rest;
+      return clean;
+    }
+    return rest;
   });
 
   const threads = {};
@@ -726,7 +730,9 @@ app.get('/api/leads/:id', requireApiOrSession, (req, res) => {
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
   lead.lead_score = calculateLeadScore(lead);
   // Restructure outreach into email threads
-  lead.outreach = groupOutreachByThread(lead.outreach);
+  // Include internal _id for authenticated users (needed for delete)
+  const includeIds = isAuthenticated(req);
+  lead.outreach = groupOutreachByThread(lead.outreach, includeIds);
   return res.json(lead);
 });
 
@@ -1042,7 +1048,8 @@ app.get('/api/outreach/by-email', requireApiOrSession, (req, res) => {
 app.get('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
-  return res.json({ outreach: groupOutreachByThread(lead.outreach) });
+  const includeIds = isAuthenticated(req);
+  return res.json({ outreach: groupOutreachByThread(lead.outreach, includeIds) });
 });
 
 app.post('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
