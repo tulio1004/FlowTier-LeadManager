@@ -33,9 +33,11 @@
         <div id="industryNav"></div>
       </nav>
       <div class="sidebar-footer">
-        <a href="/import" style="margin-bottom:8px;"><span class="icon">&#8679;</span> CSV Import</a>
-        <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
-        <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
+        <a href="/import" style="margin-bottom:8px;" class="admin-only"><span class="icon">&#8679;</span> CSV Import</a>
+        <a href="/admin/clients" class="admin-only"><span class="icon">&#128101;</span> Clients</a>
+        <a href="/dev" class="admin-only"><span class="icon">&#9881;</span> Dev Console</a>
+        <div id="userBadge" style="font-size:0.6875rem;color:var(--color-text-muted);padding:8px 0 4px;border-top:1px solid var(--color-border-light);margin-top:8px;"></div>
+        <a href="/logout" style="margin-top:4px;"><span class="icon">&#10140;</span> Logout</a>
       </div>
     </aside>
 
@@ -205,6 +207,8 @@
     let pipelineChart = null;
     let sourceChart = null;
     let showOverdueOnly = false;
+    let userRole = 'admin';
+    let userDisplayName = '';
 
     const pathParts = window.location.pathname.split('/');
     if (pathParts[1] === 'industry' && pathParts[2]) {
@@ -215,6 +219,7 @@
     // INIT
     // ════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', async () => {
+      await loadUserInfo();
       await loadConfig();
       await loadAllLeadsForSidebar();
       renderSidebar(); // Render sidebar with all leads for accurate counts
@@ -223,6 +228,28 @@
       setupEvents();
       setupKeyboardShortcuts();
     });
+
+    async function loadUserInfo() {
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        userRole = data.role || 'admin';
+        userDisplayName = data.display_name || data.user || '';
+        
+        // Show/hide admin-only elements
+        document.querySelectorAll('.admin-only').forEach(el => {
+          el.style.display = userRole === 'admin' ? '' : 'none';
+        });
+        
+        // Show user badge
+        const badge = document.getElementById('userBadge');
+        if (badge) {
+          badge.innerHTML = `Logged in as <strong style="color:var(--color-text-secondary);">${userDisplayName}</strong><br><span style="color:${userRole === 'admin' ? 'var(--color-primary)' : 'var(--color-info)'};text-transform:uppercase;font-size:0.6rem;font-weight:700;letter-spacing:0.06em;">${userRole}</span>`;
+        }
+      } catch (e) {
+        console.error('Failed to load user info:', e);
+      }
+    }
 
     async function loadConfig() {
       const [stagesRes, industriesRes, sourcesRes] = await Promise.all([

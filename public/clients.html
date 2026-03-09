@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client Management — FlowTier Leads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <img src="/static/images/logo.webp" alt="FlowTier">
+        <div class="app-label">Lead Management</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item"><span class="icon">&#8592;</span> Back to Dashboard</a>
+        <a href="/campaigns" class="nav-item"><span class="icon">&#128233;</span> Campaigns</a>
+        <a href="/admin/clients" class="nav-item active"><span class="icon">&#128101;</span> Clients</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
+        <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <!-- Header -->
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="mobile-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('mobile-open')">&#9776;</button>
+          <h1>Client <span>Management</span></h1>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" onclick="showCreateModal()">&#43; New Client</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row" id="clientStats">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalClients" style="color:var(--color-text);">0</div>
+          <div class="stat-label">Total Clients</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statActiveClients" style="color:var(--color-primary);">0</div>
+          <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalClientLeads" style="color:var(--color-info);">0</div>
+          <div class="stat-label">Assigned Leads</div>
+        </div>
+      </div>
+
+      <!-- Client Table -->
+      <div style="overflow-x:auto;">
+        <table class="lead-table" id="clientTable">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Username</th>
+              <th>Company</th>
+              <th>Email</th>
+              <th>Leads</th>
+              <th>Status</th>
+              <th>API Key</th>
+              <th>Created</th>
+              <th class="actions-cell"></th>
+            </tr>
+          </thead>
+          <tbody id="clientTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="icon">&#128101;</div>
+        <h3>No clients yet</h3>
+        <p>Create your first client to give them access to their own dashboard.</p>
+        <button class="btn btn-primary" onclick="showCreateModal()">&#43; New Client</button>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Create/Edit Client Modal -->
+  <div class="modal-overlay" id="clientModal" style="display:none;">
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <h2 id="modalTitle">New Client</h2>
+        <button class="btn-icon" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="clientForm" onsubmit="handleSubmit(event)">
+        <input type="hidden" id="editClientId" value="">
+        <div class="form-group">
+          <label for="clientUsername">Username</label>
+          <input type="text" id="clientUsername" required placeholder="e.g. johndoe" autocomplete="off" style="width:100%;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-family:inherit;">
+        </div>
+        <div class="form-group" id="passwordGroup">
+          <label for="clientPassword">Password</label>
+          <input type="password" id="clientPassword" placeholder="Min 6 characters" autocomplete="new-password" style="width:100%;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-family:inherit;">
+        </div>
+        <div class="form-group">
+          <label for="clientDisplayName">Display Name</label>
+          <input type="text" id="clientDisplayName" placeholder="e.g. John Doe" style="width:100%;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-family:inherit;">
+        </div>
+        <div class="form-group">
+          <label for="clientCompany">Company Name</label>
+          <input type="text" id="clientCompany" placeholder="e.g. Acme Corp" style="width:100%;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-family:inherit;">
+        </div>
+        <div class="form-group">
+          <label for="clientEmail">Email</label>
+          <input type="email" id="clientEmail" placeholder="john@acme.com" style="width:100%;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-family:inherit;">
+        </div>
+        <div class="form-group">
+          <label for="clientPhone">Phone</label>
+          <input type="text" id="clientPhone" placeholder="+1 555 123 4567" style="width:100%;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-family:inherit;">
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button type="submit" class="btn btn-primary" style="flex:1;padding:12px;">Save Client</button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal()" style="padding:12px;">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- API Key Modal -->
+  <div class="modal-overlay" id="apiKeyModal" style="display:none;">
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <h2>API Key</h2>
+        <button class="btn-icon" onclick="document.getElementById('apiKeyModal').style.display='none'">&times;</button>
+      </div>
+      <p style="color:var(--color-text-secondary);margin-bottom:12px;">Use this API key in the <code>X-API-Key</code> header for n8n/Vapi integrations.</p>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="apiKeyDisplay" readonly style="flex:1;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-primary);font-family:var(--font-mono);font-size:0.75rem;">
+        <button class="btn btn-secondary btn-sm" onclick="copyApiKey()">Copy</button>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn btn-warning btn-sm" id="regenKeyBtn" onclick="regenerateKey()">Regenerate Key</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('apiKeyModal').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assign Leads Modal -->
+  <div class="modal-overlay" id="assignModal" style="display:none;">
+    <div class="modal-content" style="max-width:640px;max-height:80vh;overflow-y:auto;">
+      <div class="modal-header">
+        <h2 id="assignTitle">Assign Leads</h2>
+        <button class="btn-icon" onclick="document.getElementById('assignModal').style.display='none'">&times;</button>
+      </div>
+      <p style="color:var(--color-text-secondary);margin-bottom:12px;">Select leads to assign to this client. Only unassigned leads are shown.</p>
+      <div style="margin-bottom:12px;">
+        <input type="text" id="assignSearch" placeholder="Search leads..." oninput="filterAssignLeads()" style="width:100%;padding:10px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);color:var(--color-text);font-family:inherit;">
+      </div>
+      <div id="assignLeadsList" style="max-height:400px;overflow-y:auto;"></div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="assignSelectedLeads()">Assign Selected</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('assignModal').style.display='none'">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let clients = [];
+    let allLeads = [];
+    let currentApiKeyClientId = null;
+    let currentAssignClientId = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadClients();
+    });
+
+    async function loadClients() {
+      const res = await fetch('/api/clients');
+      const data = await res.json();
+      clients = data.clients || [];
+      renderClients();
+      updateStats();
+    }
+
+    function updateStats() {
+      document.getElementById('statTotalClients').textContent = clients.length;
+      document.getElementById('statActiveClients').textContent = clients.filter(c => c.active).length;
+      document.getElementById('statTotalClientLeads').textContent = clients.reduce((sum, c) => sum + (c.lead_count || 0), 0);
+    }
+
+    function renderClients() {
+      const tbody = document.getElementById('clientTableBody');
+      const empty = document.getElementById('emptyState');
+
+      if (clients.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      tbody.innerHTML = clients.map(c => `
+        <tr>
+          <td>
+            <div style="font-weight:600;">${esc(c.display_name)}</div>
+          </td>
+          <td><code style="font-size:0.75rem;color:var(--color-text-muted);">${esc(c.username)}</code></td>
+          <td>${esc(c.company_name || '-')}</td>
+          <td>${esc(c.email || '-')}</td>
+          <td><span style="font-weight:700;color:var(--color-info);">${c.lead_count || 0}</span></td>
+          <td>
+            <span class="stage-badge" style="background:${c.active ? 'rgba(0,230,118,0.12);color:#00E676' : 'rgba(255,82,82,0.12);color:#FF5252'};">
+              ${c.active ? 'Active' : 'Inactive'}
+            </span>
+          </td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="showApiKey('${c.client_id}', '${esc(c.api_key)}')" style="font-family:var(--font-mono);font-size:0.65rem;">
+              ${c.api_key.substring(0, 12)}...
+            </button>
+          </td>
+          <td style="font-size:0.75rem;color:var(--color-text-muted);">${new Date(c.created_at).toLocaleDateString()}</td>
+          <td class="actions-cell">
+            <div style="display:flex;gap:4px;">
+              <button class="btn-icon" title="Edit" onclick="showEditModal('${c.client_id}')">&#9998;</button>
+              <button class="btn-icon" title="Assign Leads" onclick="showAssignModal('${c.client_id}')">&#128203;</button>
+              <button class="btn-icon" title="${c.active ? 'Deactivate' : 'Activate'}" onclick="toggleActive('${c.client_id}', ${!c.active})">${c.active ? '&#9940;' : '&#9989;'}</button>
+              <button class="btn-icon" title="Delete" onclick="deleteClient('${c.client_id}')" style="color:var(--color-danger);">&#128465;</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function esc(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    // ── Create / Edit Modal ──
+    function showCreateModal() {
+      document.getElementById('modalTitle').textContent = 'New Client';
+      document.getElementById('editClientId').value = '';
+      document.getElementById('clientUsername').value = '';
+      document.getElementById('clientUsername').disabled = false;
+      document.getElementById('clientPassword').value = '';
+      document.getElementById('clientPassword').required = true;
+      document.getElementById('clientPassword').placeholder = 'Min 6 characters';
+      document.getElementById('clientDisplayName').value = '';
+      document.getElementById('clientCompany').value = '';
+      document.getElementById('clientEmail').value = '';
+      document.getElementById('clientPhone').value = '';
+      document.getElementById('clientModal').style.display = 'flex';
+    }
+
+    function showEditModal(clientId) {
+      const c = clients.find(x => x.client_id === clientId);
+      if (!c) return;
+      document.getElementById('modalTitle').textContent = 'Edit Client';
+      document.getElementById('editClientId').value = clientId;
+      document.getElementById('clientUsername').value = c.username;
+      document.getElementById('clientUsername').disabled = true;
+      document.getElementById('clientPassword').value = '';
+      document.getElementById('clientPassword').required = false;
+      document.getElementById('clientPassword').placeholder = 'Leave blank to keep current';
+      document.getElementById('clientDisplayName').value = c.display_name || '';
+      document.getElementById('clientCompany').value = c.company_name || '';
+      document.getElementById('clientEmail').value = c.email || '';
+      document.getElementById('clientPhone').value = c.phone || '';
+      document.getElementById('clientModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('clientModal').style.display = 'none';
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      const clientId = document.getElementById('editClientId').value;
+      const isEdit = !!clientId;
+
+      const body = {
+        display_name: document.getElementById('clientDisplayName').value.trim(),
+        company_name: document.getElementById('clientCompany').value.trim(),
+        email: document.getElementById('clientEmail').value.trim(),
+        phone: document.getElementById('clientPhone').value.trim()
+      };
+
+      if (!isEdit) {
+        body.username = document.getElementById('clientUsername').value.trim();
+        body.password = document.getElementById('clientPassword').value;
+        if (!body.username || !body.password) { showToast('Username and password are required', 'error'); return; }
+      } else {
+        const pw = document.getElementById('clientPassword').value;
+        if (pw) body.password = pw;
+      }
+
+      const url = isEdit ? `/api/clients/${clientId}` : '/api/clients';
+      const method = isEdit ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast(isEdit ? 'Client updated' : 'Client created', 'success');
+        closeModal();
+        await loadClients();
+      } else {
+        showToast(data.error || 'Error', 'error');
+      }
+    }
+
+    // ── API Key ──
+    function showApiKey(clientId, apiKey) {
+      currentApiKeyClientId = clientId;
+      document.getElementById('apiKeyDisplay').value = apiKey;
+      document.getElementById('apiKeyModal').style.display = 'flex';
+    }
+
+    function copyApiKey() {
+      const input = document.getElementById('apiKeyDisplay');
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      showToast('API key copied', 'success');
+    }
+
+    async function regenerateKey() {
+      if (!confirm('Regenerate API key? The old key will stop working immediately.')) return;
+      const res = await fetch(`/api/clients/${currentApiKeyClientId}/regenerate-key`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('apiKeyDisplay').value = data.api_key;
+        showToast('API key regenerated', 'success');
+        await loadClients();
+      }
+    }
+
+    // ── Toggle Active ──
+    async function toggleActive(clientId, active) {
+      const res = await fetch(`/api/clients/${clientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Client ${active ? 'activated' : 'deactivated'}`, 'success');
+        await loadClients();
+      }
+    }
+
+    // ── Delete ──
+    async function deleteClient(clientId) {
+      if (!confirm('Delete this client? Their leads will remain but become unassigned.')) return;
+      const res = await fetch(`/api/clients/${clientId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Client deleted', 'success');
+        await loadClients();
+      }
+    }
+
+    // ── Assign Leads ──
+    async function showAssignModal(clientId) {
+      currentAssignClientId = clientId;
+      const c = clients.find(x => x.client_id === clientId);
+      document.getElementById('assignTitle').textContent = `Assign Leads to ${c ? c.display_name : 'Client'}`;
+
+      // Load all unassigned leads
+      const res = await fetch('/api/leads');
+      const data = await res.json();
+      allLeads = (data.leads || []).filter(l => !l.owner_id);
+      renderAssignLeads(allLeads);
+      document.getElementById('assignModal').style.display = 'flex';
+    }
+
+    function filterAssignLeads() {
+      const q = document.getElementById('assignSearch').value.toLowerCase();
+      const filtered = allLeads.filter(l =>
+        (l.company_name || '').toLowerCase().includes(q) ||
+        (l.contact_name || '').toLowerCase().includes(q) ||
+        (l.emails || []).some(e => e.toLowerCase().includes(q))
+      );
+      renderAssignLeads(filtered);
+    }
+
+    function renderAssignLeads(leads) {
+      const container = document.getElementById('assignLeadsList');
+      if (leads.length === 0) {
+        container.innerHTML = '<p style="color:var(--color-text-muted);text-align:center;padding:20px;">No unassigned leads found.</p>';
+        return;
+      }
+      container.innerHTML = leads.map(l => `
+        <label style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--color-border-light);cursor:pointer;">
+          <input type="checkbox" class="assign-check" value="${l.id}">
+          <div>
+            <div style="font-weight:600;font-size:0.8125rem;">${esc(l.company_name || 'No Company')}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-muted);">${esc(l.contact_name || '')} ${l.emails && l.emails[0] ? '— ' + esc(l.emails[0]) : ''}</div>
+          </div>
+          <span class="stage-badge" style="margin-left:auto;font-size:0.65rem;">${l.stage || 'cold'}</span>
+        </label>
+      `).join('');
+    }
+
+    async function assignSelectedLeads() {
+      const checks = document.querySelectorAll('.assign-check:checked');
+      const lead_ids = Array.from(checks).map(c => c.value);
+      if (lead_ids.length === 0) { showToast('Select at least one lead', 'error'); return; }
+
+      const res = await fetch(`/api/clients/${currentAssignClientId}/assign-leads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_ids })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`${data.assigned} lead(s) assigned`, 'success');
+        document.getElementById('assignModal').style.display = 'none';
+        await loadClients();
+      }
+    }
+
+    // ── Toast ──
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = 'toast show ' + (type || '');
+      setTimeout(() => { toast.className = 'toast'; }, 3000);
+    }
+  </script>
+
+  <style>
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .modal-content {
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      width: 100%;
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-header h2 { font-size: 1.125rem; font-weight: 700; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block; font-size: 0.75rem; font-weight: 600;
+      color: var(--color-text-secondary); margin-bottom: 6px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+  </style>
+</body>
+</html>

@@ -1,6 +1,7 @@
 /* ============================================
-   SERVER.JS — FlowTier Lead Management System v2.0
+   SERVER.JS — FlowTier Lead Management System v3.0
    Express server for leads.flowtier.io
+   Multi-tenant with client dashboards
    ============================================ */
 
 const express = require('express');
@@ -9,6 +10,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
+const bcrypt = require('bcryptjs');
 const {
   readCampaign, writeCampaign, deleteCampaignFile, getAllCampaigns,
   createCampaignObject, getBlacklist, saveBlacklist, isBlacklisted,
@@ -20,6 +22,7 @@ const PORT = process.env.PORT || 4000;
 const DATA_DIR = path.join(__dirname, 'data');
 const CONFIG_DIR = path.join(__dirname, 'config');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const USERS_DIR = path.join(CONFIG_DIR, 'users');
 
 // Auth credentials
 const ADMIN_USER = process.env.ADMIN_USER || 'tulio';
@@ -27,7 +30,7 @@ const ADMIN_PASS = process.env.ADMIN_PASS || '25524515Fl0wT13r';
 const API_KEY = process.env.API_KEY || null;
 
 // Ensure directories exist
-[DATA_DIR, CONFIG_DIR, UPLOADS_DIR].forEach(dir => {
+[DATA_DIR, CONFIG_DIR, UPLOADS_DIR, USERS_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -117,6 +120,67 @@ function getEmailTemplates() {
 
 function saveEmailTemplates(templates) {
   fs.writeFileSync(EMAIL_TEMPLATES_FILE, JSON.stringify(templates, null, 2), 'utf8');
+}
+
+// ============================================
+// CLIENT/USER MANAGEMENT HELPERS
+// ============================================
+function getUserPath(username) {
+  return path.join(USERS_DIR, `${username.toLowerCase().replace(/[^a-z0-9_-]/g, '_')}.json`);
+}
+
+function readUser(username) {
+  const p = getUserPath(username);
+  if (!fs.existsSync(p)) return null;
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; }
+}
+
+function writeUser(user) {
+  fs.writeFileSync(getUserPath(user.username), JSON.stringify(user, null, 2), 'utf8');
+}
+
+function deleteUser(username) {
+  const p = getUserPath(username);
+  if (fs.existsSync(p)) fs.unlinkSync(p);
+}
+
+function getAllUsers() {
+  if (!fs.existsSync(USERS_DIR)) return [];
+  const files = fs.readdirSync(USERS_DIR).filter(f => f.endsWith('.json'));
+  return files.map(f => {
+    try { return JSON.parse(fs.readFileSync(path.join(USERS_DIR, f), 'utf8')); }
+    catch (e) { return null; }
+  }).filter(Boolean);
+}
+
+function findUserByApiKey(apiKey) {
+  if (!apiKey) return null;
+  const users = getAllUsers();
+  return users.find(u => u.api_key === apiKey) || null;
+}
+
+function findUserByClientId(clientId) {
+  if (!clientId) return null;
+  const users = getAllUsers();
+  return users.find(u => u.client_id === clientId) || null;
+}
+
+function createUserObject(data) {
+  const now = new Date().toISOString();
+  return {
+    client_id: data.client_id || uuidv4(),
+    username: data.username.toLowerCase().trim(),
+    password_hash: data.password_hash || '',
+    display_name: data.display_name || data.username,
+    email: data.email || '',
+    company_name: data.company_name || '',
+    phone: data.phone || '',
+    api_key: data.api_key || 'ftk_' + crypto.randomBytes(24).toString('hex'),
+    role: 'client',
+    active: data.active !== false,
+    created_at: data.created_at || now,
+    updated_at: now
+  };
 }
 
 // ============================================
@@ -261,6 +325,7 @@ function createLeadObject(data) {
     custom_fields: data.custom_fields || {},
     activity: Array.isArray(data.activity) ? data.activity : [],
     human_mode: data.human_mode === true ? true : false,
+    owner_id: data.owner_id || null,
     lead_score: 0,
     created_at: data.created_at || now,
     updated_at: now,
@@ -388,7 +453,7 @@ const fileUpload = multer({
 });
 
 // ============================================
-// SESSION AUTH
+// SESSION AUTH (Multi-Tenant)
 // ============================================
 const activeSessions = new Map();
 
@@ -402,32 +467,86 @@ function getTokenFromReq(req) {
   return match ? match[1] : null;
 }
 
-function isAuthenticated(req) {
+// Returns session object or null
+function getSession(req) {
   const token = getTokenFromReq(req);
-  if (!token) return false;
+  if (!token) return null;
   const session = activeSessions.get(token);
-  if (!session) return false;
+  if (!session) return null;
   if (Date.now() - session.created > 86400000) {
     activeSessions.delete(token);
-    return false;
+    return null;
   }
-  return true;
+  return session;
+}
+
+function isAuthenticated(req) {
+  return getSession(req) !== null;
+}
+
+// Attach session info to req for downstream use
+function attachSession(req) {
+  const session = getSession(req);
+  if (session) {
+    req.userSession = session;
+    return true;
+  }
+  // Check API key auth (admin or client)
+  const providedKey = req.headers['x-api-key'] || req.query.api_key;
+  if (providedKey) {
+    // Check admin API key first
+    if (API_KEY && providedKey === API_KEY) {
+      req.userSession = { user: ADMIN_USER, role: 'admin', client_id: null, created: Date.now() };
+      return true;
+    }
+    // Check client API keys
+    const clientUser = findUserByApiKey(providedKey);
+    if (clientUser && clientUser.active) {
+      req.userSession = { user: clientUser.username, role: 'client', client_id: clientUser.client_id, created: Date.now() };
+      return true;
+    }
+  }
+  // Fallback: if no API_KEY is set, allow open API access as admin
+  if (!API_KEY && req.path.startsWith('/api/')) {
+    req.userSession = { user: 'anonymous', role: 'admin', client_id: null, created: Date.now() };
+    return true;
+  }
+  return false;
 }
 
 function requireAuth(req, res, next) {
-  if (isAuthenticated(req)) return next();
+  if (attachSession(req)) {
+    // requireAuth = session-only (browser), must be admin
+    if (req.userSession.role === 'admin' || req.userSession.role === 'client') return next();
+  }
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
   return res.redirect('/login');
 }
 
+function requireAdmin(req, res, next) {
+  if (attachSession(req) && req.userSession.role === 'admin') return next();
+  if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'Admin access required' });
+  return res.redirect('/login');
+}
+
 function requireApiOrSession(req, res, next) {
-  if (isAuthenticated(req)) return next();
-  if (API_KEY) {
-    const provided = req.headers['x-api-key'] || req.query.api_key;
-    if (provided === API_KEY) return next();
-  }
-  if (!API_KEY && req.path.startsWith('/api/')) return next();
+  if (attachSession(req)) return next();
   return res.status(401).json({ error: 'Unauthorized' });
+}
+
+// Helper: get leads filtered by ownership
+function getLeadsForSession(req) {
+  const allLeads = getAllLeads();
+  if (!req.userSession || req.userSession.role === 'admin') return allLeads;
+  const clientId = req.userSession.client_id;
+  return allLeads.filter(l => l.owner_id === clientId);
+}
+
+// Helper: check if session can access a specific lead
+function canAccessLead(req, lead) {
+  if (!lead) return false;
+  if (!req.userSession || req.userSession.role === 'admin') return true;
+  return lead.owner_id === req.userSession.client_id;
 }
 
 // ============================================
@@ -438,14 +557,33 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
+  
+  // Check admin credentials first
   if (username === ADMIN_USER && password === ADMIN_PASS) {
     const token = generateToken();
-    activeSessions.set(token, { user: username, created: Date.now() });
+    activeSessions.set(token, { user: username, role: 'admin', client_id: null, created: Date.now() });
     res.setHeader('Set-Cookie', `lead_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`);
     return res.redirect('/');
   }
+  
+  // Check client credentials
+  const clientUser = readUser(username);
+  if (clientUser && clientUser.active) {
+    try {
+      const passwordMatch = await bcrypt.compare(password, clientUser.password_hash);
+      if (passwordMatch) {
+        const token = generateToken();
+        activeSessions.set(token, { user: clientUser.username, role: 'client', client_id: clientUser.client_id, display_name: clientUser.display_name, created: Date.now() });
+        res.setHeader('Set-Cookie', `lead_token=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`);
+        return res.redirect('/');
+      }
+    } catch (e) {
+      console.error('[Login] bcrypt error:', e.message);
+    }
+  }
+  
   res.redirect('/login?error=1');
 });
 
@@ -454,6 +592,18 @@ app.get('/logout', (req, res) => {
   if (token) activeSessions.delete(token);
   res.setHeader('Set-Cookie', 'lead_token=; Path=/; HttpOnly; Max-Age=0');
   res.redirect('/login');
+});
+
+// Session info endpoint (for frontend to know role)
+app.get('/api/me', (req, res) => {
+  if (!attachSession(req)) return res.status(401).json({ error: 'Not authenticated' });
+  const s = req.userSession;
+  return res.json({
+    user: s.user,
+    role: s.role,
+    client_id: s.client_id || null,
+    display_name: s.display_name || s.user
+  });
 });
 
 // ============================================
@@ -483,8 +633,13 @@ app.get('/import', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'import.html'));
 });
 
-app.get('/dev', requireAuth, (req, res) => {
+app.get('/dev', requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dev.html'));
+});
+
+// Admin: Client Management page
+app.get('/admin/clients', requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'clients.html'));
 });
 
 // ============================================
@@ -558,8 +713,8 @@ app.get('/api/leads/by-email', requireApiOrSession, (req, res) => {
   }
 
   try {
-    const allLeads = getAllLeads();
-    const match = allLeads.find(l => {
+    const leads = getLeadsForSession(req);
+    const match = leads.find(l => {
       const emails = (l.emails || []).flat(Infinity)
         .map(e => typeof e === 'string' ? e.trim().toLowerCase() : '');
       return emails.includes(email);
@@ -574,6 +729,34 @@ app.get('/api/leads/by-email', requireApiOrSession, (req, res) => {
     return res.json({ found: true, lead: match });
   } catch (err) {
     console.error('[ByEmail] Error:', err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Phone exact-match search — returns full lead object when phone matches
+// Critical for GHL migration: n8n uses this to find leads from Vapi SMS/calls
+app.get('/api/leads/by-phone', requireApiOrSession, (req, res) => {
+  const phone = (req.query.phone || '').replace(/\D/g, '');
+  if (!phone || phone.length < 7) {
+    return res.status(400).json({ error: 'Valid phone parameter is required (min 7 digits)' });
+  }
+
+  try {
+    const leads = getLeadsForSession(req);
+    const match = leads.find(l => {
+      const normalizedPhones = (l.phones || []).map(p => p.replace(/\D/g, ''));
+      return normalizedPhones.some(p => p.endsWith(phone.slice(-10)) || phone.endsWith(p.slice(-10)));
+    });
+
+    if (!match) {
+      return res.json({ found: false, lead: null });
+    }
+
+    match.lead_score = calculateLeadScore(match);
+    match.outreach = groupOutreachByThread(match.outreach);
+    return res.json({ found: true, lead: match });
+  } catch (err) {
+    console.error('[ByPhone] Error:', err.message);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -616,7 +799,7 @@ app.get('/api/leads/search', (req, res) => {
 // List leads
 app.get('/api/leads', requireApiOrSession, (req, res) => {
   try {
-    let leads = getAllLeads();
+    let leads = getLeadsForSession(req);
     const { industry, stage, tag, search, source, sort, order } = req.query;
 
     if (industry) {
@@ -736,6 +919,7 @@ function groupOutreachByThread(rawOutreach) {
 app.get('/api/leads/:id', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, lead)) return res.status(403).json({ error: 'Access denied' });
   lead.lead_score = calculateLeadScore(lead);
   // Backfill _id on old entries and persist
   backfillOutreachIds(lead);
@@ -749,6 +933,11 @@ app.post('/api/leads', requireApiOrSession, (req, res) => {
   try {
     const data = req.body;
     data._source = data._source || req.headers['x-source'] || 'api';
+    
+    // Auto-assign owner_id based on session (client leads belong to client)
+    if (!data.owner_id && req.userSession && req.userSession.role === 'client') {
+      data.owner_id = req.userSession.client_id;
+    }
 
     const lead = createLeadObject(data);
     lead.activity.push({
@@ -775,6 +964,7 @@ app.post('/api/leads', requireApiOrSession, (req, res) => {
 app.put('/api/leads/:id', requireApiOrSession, (req, res) => {
   const existing = readLead(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, existing)) return res.status(403).json({ error: 'Access denied' });
 
   try {
     const data = req.body;
@@ -819,6 +1009,7 @@ app.put('/api/leads/:id', requireApiOrSession, (req, res) => {
 app.patch('/api/leads/:id', requireApiOrSession, (req, res) => {
   const existing = readLead(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, existing)) return res.status(403).json({ error: 'Access denied' });
 
   try {
     const data = req.body;
@@ -861,6 +1052,7 @@ app.patch('/api/leads/:id', requireApiOrSession, (req, res) => {
 app.delete('/api/leads/:id', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, lead)) return res.status(403).json({ error: 'Access denied' });
   deleteLead(req.params.id);
   console.log(`[${new Date().toISOString()}] Lead deleted: ${req.params.id}`);
   return res.json({ success: true, message: `Lead ${req.params.id} deleted` });
@@ -933,6 +1125,7 @@ app.post('/api/leads/bulk/tag', requireAuth, (req, res) => {
 app.post('/api/leads/:id/notes', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, lead)) return res.status(403).json({ error: 'Access denied' });
 
   const { content, type, title } = req.body;
   if (!content) return res.status(400).json({ error: 'Content required' });
@@ -1056,12 +1249,14 @@ app.get('/api/outreach/by-email', requireApiOrSession, (req, res) => {
 app.get('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, lead)) return res.status(403).json({ error: 'Access denied' });
   return res.json({ outreach: groupOutreachByThread(lead.outreach) });
 });
 
 app.post('/api/leads/:id/outreach', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, lead)) return res.status(403).json({ error: 'Access denied' });
 
   const { direction, subject, body, channel, from_email, to_email } = req.body;
   if (!direction || !body) return res.status(400).json({ error: 'direction and body required' });
@@ -1179,6 +1374,7 @@ app.post('/api/upload/image', requireAuth, fileUpload.single('image'), (req, res
 app.post('/api/leads/:id/calendar', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, lead)) return res.status(403).json({ error: 'Access denied' });
 
   const { event_id, title, event_date, start_time, end_time, meet_link, description, attendees } = req.body;
 
@@ -1529,7 +1725,7 @@ function parseCSVLine(line) {
 // ============================================
 app.get('/api/stats', requireApiOrSession, (req, res) => {
   try {
-    const leads = getAllLeads();
+    const leads = getLeadsForSession(req);
     const now = new Date();
 
     const byStage = {};
@@ -2154,6 +2350,7 @@ app.get('/api/campaigns/:id/analytics', requireApiOrSession, (req, res) => {
 app.get('/api/leads/:id/conversations', requireApiOrSession, (req, res) => {
   const lead = readLead(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!canAccessLead(req, lead)) return res.status(403).json({ error: 'Access denied' });
 
   // Group outreach into email threads
   const conversations = groupOutreachByThread(lead.outreach);
@@ -2260,18 +2457,177 @@ app.post('/api/campaigns/:id/test-send', requireAuth, async (req, res) => {
 });
 
 // ============================================
+// API: CLIENT MANAGEMENT (Admin only)
+// ============================================
+
+// List all clients
+app.get('/api/clients', requireAdmin, (req, res) => {
+  const users = getAllUsers();
+  // Count leads per client
+  const allLeads = getAllLeads();
+  const clients = users.map(u => {
+    const leadCount = allLeads.filter(l => l.owner_id === u.client_id).length;
+    return {
+      client_id: u.client_id,
+      username: u.username,
+      display_name: u.display_name,
+      email: u.email,
+      company_name: u.company_name,
+      phone: u.phone,
+      api_key: u.api_key,
+      active: u.active,
+      lead_count: leadCount,
+      created_at: u.created_at,
+      updated_at: u.updated_at
+    };
+  });
+  return res.json({ clients, total: clients.length });
+});
+
+// Get single client
+app.get('/api/clients/:clientId', requireAdmin, (req, res) => {
+  const users = getAllUsers();
+  const user = users.find(u => u.client_id === req.params.clientId);
+  if (!user) return res.status(404).json({ error: 'Client not found' });
+  const allLeads = getAllLeads();
+  const leadCount = allLeads.filter(l => l.owner_id === user.client_id).length;
+  return res.json({
+    client_id: user.client_id,
+    username: user.username,
+    display_name: user.display_name,
+    email: user.email,
+    company_name: user.company_name,
+    phone: user.phone,
+    api_key: user.api_key,
+    active: user.active,
+    lead_count: leadCount,
+    created_at: user.created_at,
+    updated_at: user.updated_at
+  });
+});
+
+// Create client
+app.post('/api/clients', requireAdmin, async (req, res) => {
+  const { username, password, display_name, email, company_name, phone } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+  if (username.toLowerCase() === ADMIN_USER.toLowerCase()) return res.status(400).json({ error: 'Username conflicts with admin' });
+  if (readUser(username)) return res.status(400).json({ error: 'Username already exists' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+  const password_hash = await bcrypt.hash(password, 10);
+  const user = createUserObject({ username, password_hash, display_name, email, company_name, phone });
+  writeUser(user);
+  console.log(`[${new Date().toISOString()}] Client created: ${user.username} (${user.client_id})`);
+  return res.json({ success: true, client: { client_id: user.client_id, username: user.username, display_name: user.display_name, api_key: user.api_key } });
+});
+
+// Update client
+app.patch('/api/clients/:clientId', requireAdmin, async (req, res) => {
+  const users = getAllUsers();
+  const user = users.find(u => u.client_id === req.params.clientId);
+  if (!user) return res.status(404).json({ error: 'Client not found' });
+
+  const { display_name, email, company_name, phone, password, active } = req.body;
+  if (display_name !== undefined) user.display_name = display_name;
+  if (email !== undefined) user.email = email;
+  if (company_name !== undefined) user.company_name = company_name;
+  if (phone !== undefined) user.phone = phone;
+  if (active !== undefined) user.active = active;
+  if (password && password.length >= 6) {
+    user.password_hash = await bcrypt.hash(password, 10);
+  }
+  user.updated_at = new Date().toISOString();
+  writeUser(user);
+  return res.json({ success: true, client: { client_id: user.client_id, username: user.username, display_name: user.display_name, active: user.active } });
+});
+
+// Regenerate client API key
+app.post('/api/clients/:clientId/regenerate-key', requireAdmin, (req, res) => {
+  const users = getAllUsers();
+  const user = users.find(u => u.client_id === req.params.clientId);
+  if (!user) return res.status(404).json({ error: 'Client not found' });
+  user.api_key = 'ftk_' + crypto.randomBytes(24).toString('hex');
+  user.updated_at = new Date().toISOString();
+  writeUser(user);
+  return res.json({ success: true, api_key: user.api_key });
+});
+
+// Delete client
+app.delete('/api/clients/:clientId', requireAdmin, (req, res) => {
+  const users = getAllUsers();
+  const user = users.find(u => u.client_id === req.params.clientId);
+  if (!user) return res.status(404).json({ error: 'Client not found' });
+  deleteUser(user.username);
+  console.log(`[${new Date().toISOString()}] Client deleted: ${user.username}`);
+  return res.json({ success: true });
+});
+
+// Assign leads to a client (admin only)
+app.post('/api/clients/:clientId/assign-leads', requireAdmin, (req, res) => {
+  const { lead_ids } = req.body;
+  if (!Array.isArray(lead_ids)) return res.status(400).json({ error: 'lead_ids array required' });
+  const users = getAllUsers();
+  const user = users.find(u => u.client_id === req.params.clientId);
+  if (!user) return res.status(404).json({ error: 'Client not found' });
+
+  let assigned = 0;
+  lead_ids.forEach(id => {
+    const lead = readLead(id);
+    if (lead) {
+      lead.owner_id = user.client_id;
+      lead.updated_at = new Date().toISOString();
+      if (!lead.activity) lead.activity = [];
+      lead.activity.push({
+        type: 'assigned',
+        message: `Lead assigned to client: ${user.display_name}`,
+        timestamp: lead.updated_at
+      });
+      writeLead(lead);
+      assigned++;
+    }
+  });
+  return res.json({ success: true, assigned });
+});
+
+// Unassign leads from client (return to admin pool)
+app.post('/api/clients/:clientId/unassign-leads', requireAdmin, (req, res) => {
+  const { lead_ids } = req.body;
+  if (!Array.isArray(lead_ids)) return res.status(400).json({ error: 'lead_ids array required' });
+
+  let unassigned = 0;
+  lead_ids.forEach(id => {
+    const lead = readLead(id);
+    if (lead && lead.owner_id === req.params.clientId) {
+      lead.owner_id = null;
+      lead.updated_at = new Date().toISOString();
+      if (!lead.activity) lead.activity = [];
+      lead.activity.push({
+        type: 'unassigned',
+        message: 'Lead returned to admin pool',
+        timestamp: lead.updated_at
+      });
+      writeLead(lead);
+      unassigned++;
+    }
+  });
+  return res.json({ success: true, unassigned });
+});
+
+// ============================================
 // START SERVER
 // ============================================
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`
   ┌─────────────────────────────────────────┐
-  │  FlowTier Lead Management System v2.0   │
+  │  FlowTier Lead Management System v3.0   │
+  │  Multi-Tenant with Client Dashboards     │
   │  Running on port ${PORT}                    │
   │                                         │
-  │  Dashboard: http://localhost:${PORT}/        │
-  │  API:       http://localhost:${PORT}/api/...  │
-  │  Dev:       http://localhost:${PORT}/dev      │
-  │  Campaigns: http://localhost:${PORT}/campaigns │
+  │  Dashboard:  http://localhost:${PORT}/       │
+  │  API:        http://localhost:${PORT}/api/...│
+  │  Clients:    http://localhost:${PORT}/admin/clients │
+  │  Dev:        http://localhost:${PORT}/dev     │
+  │  Campaigns:  http://localhost:${PORT}/campaigns│
   └─────────────────────────────────────────┘
   `);
 

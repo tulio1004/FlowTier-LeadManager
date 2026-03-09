@@ -25,8 +25,10 @@
         <a href="/campaigns" class="nav-item" style="margin-top:8px;"><span class="icon">&#128233;</span> Campaigns</a>
       </nav>
       <div class="sidebar-footer">
-        <a href="/dev"><span class="icon">&#9881;</span> Dev Console</a>
-        <a href="/logout" style="margin-top:8px;"><span class="icon">&#10140;</span> Logout</a>
+        <a href="/admin/clients" class="admin-only"><span class="icon">&#128101;</span> Clients</a>
+        <a href="/dev" class="admin-only"><span class="icon">&#9881;</span> Dev Console</a>
+        <div id="userBadge" style="font-size:0.6875rem;color:var(--color-text-muted);padding:8px 0 4px;border-top:1px solid var(--color-border-light);margin-top:8px;"></div>
+        <a href="/logout" style="margin-top:4px;"><span class="icon">&#10140;</span> Logout</a>
       </div>
     </aside>
 
@@ -326,8 +328,23 @@
     let stages = [];
     let quillEditor = null;
     let editingNoteId = null;
+    let userRole = 'admin';
 
     document.addEventListener('DOMContentLoaded', async () => {
+      // Load user info for role-based UI
+      try {
+        const meRes = await fetch('/api/me');
+        const meData = await meRes.json();
+        userRole = meData.role || 'admin';
+        document.querySelectorAll('.admin-only').forEach(el => {
+          el.style.display = userRole === 'admin' ? '' : 'none';
+        });
+        const badge = document.getElementById('userBadge');
+        if (badge) {
+          badge.innerHTML = `Logged in as <strong style="color:var(--color-text-secondary);">${meData.display_name || meData.user}</strong><br><span style="color:${userRole === 'admin' ? 'var(--color-primary)' : 'var(--color-info)'};text-transform:uppercase;font-size:0.6rem;font-weight:700;letter-spacing:0.06em;">${userRole}</span>`;
+        }
+      } catch (e) {}
+      
       stages = (await fetch('/api/stages').then(r => r.json())).stages;
       await loadLead();
       setupEvents();
