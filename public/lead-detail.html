@@ -458,7 +458,7 @@
         try {
           const res = await fetch('https://proposals.flowtier.io/api/intake', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + btoa('tulio:25524515Fl0wT13r') },
+            headers: { 'Content-Type': 'application/json', 'X-Intake-Key': 'ft-intake-2026-flowtier' },
             body: JSON.stringify({
               ghl_contact_id: ghlId,
               client_name: lead.contact_name || '',
