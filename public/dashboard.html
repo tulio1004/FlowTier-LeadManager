@@ -57,7 +57,7 @@
           </div>
           <a href="/api/export/csv" class="btn btn-secondary btn-sm" id="exportBtn">&#8681; Export CSV</a>
           <a href="/import" class="btn btn-secondary btn-sm">&#8679; Import CSV</a>
-          <a href="/new" class="btn btn-primary">&#43; New Lead</a>
+          <button class="btn btn-primary" onclick="openNewContactModal()">&#43; New Contact</button>
         </div>
       </div>
 
@@ -955,6 +955,211 @@
       setTimeout(() => t.classList.add('visible'), 10);
       setTimeout(() => t.classList.remove('visible'), 3000);
     }
+  </script>
+
+  <!-- ================================================
+       GHL NEW CONTACT MODAL
+       ================================================ -->
+  <div id="ghlModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:16px;width:100%;max-width:520px;margin:16px;overflow:hidden;">
+
+      <!-- Step 1: Choose action -->
+      <div id="ghlStep1">
+        <div style="padding:24px 28px 20px;border-bottom:1px solid var(--color-border);">
+          <h2 style="margin:0;font-size:1.125rem;">Add New Contact</h2>
+          <p style="margin:6px 0 0;color:var(--color-text-muted);font-size:0.875rem;">How would you like to add this contact?</p>
+        </div>
+        <div style="padding:24px 28px;display:flex;flex-direction:column;gap:12px;">
+          <button onclick="startPullFromGHL()" style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.3);border-radius:10px;padding:16px 20px;text-align:left;cursor:pointer;color:var(--color-text);">
+            <div style="font-weight:600;font-size:0.9375rem;color:var(--color-primary);">&#8659; Pull from GHL</div>
+            <div style="font-size:0.8125rem;color:var(--color-text-muted);margin-top:4px;">Search GoHighLevel by email and import the contact here.</div>
+          </button>
+          <button onclick="startCreateNew()" style="background:rgba(255,255,255,0.04);border:1px solid var(--color-border);border-radius:10px;padding:16px 20px;text-align:left;cursor:pointer;color:var(--color-text);">
+            <div style="font-weight:600;font-size:0.9375rem;">&#43; Create New</div>
+            <div style="font-size:0.8125rem;color:var(--color-text-muted);margin-top:4px;">Fill in the details manually. The contact will be created here and in GHL simultaneously.</div>
+          </button>
+        </div>
+        <div style="padding:0 28px 20px;text-align:right;">
+          <button onclick="closeGhlModal()" style="background:none;border:none;color:var(--color-text-muted);cursor:pointer;font-size:0.875rem;">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Step 2a: Pull from GHL -->
+      <div id="ghlStep2Pull" style="display:none;">
+        <div style="padding:24px 28px 20px;border-bottom:1px solid var(--color-border);">
+          <h2 style="margin:0;font-size:1.125rem;">Pull from GHL</h2>
+          <p style="margin:6px 0 0;color:var(--color-text-muted);font-size:0.875rem;">Enter the contact's email address to search GHL.</p>
+        </div>
+        <div style="padding:24px 28px;">
+          <input type="email" id="ghlPullEmail" placeholder="contact@example.com" style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:10px 14px;color:var(--color-text);font-size:0.9375rem;" onkeydown="if(event.key==='Enter')searchGHL()">
+          <div id="ghlPullResult" style="margin-top:16px;"></div>
+        </div>
+        <div style="padding:0 28px 20px;display:flex;justify-content:space-between;align-items:center;">
+          <button onclick="showGhlStep(1)" style="background:none;border:none;color:var(--color-text-muted);cursor:pointer;font-size:0.875rem;">&#8592; Back</button>
+          <button onclick="searchGHL()" class="btn btn-primary btn-sm" id="ghlSearchBtn">Search GHL</button>
+        </div>
+      </div>
+
+      <!-- Step 2b: Create New -->
+      <div id="ghlStep2Create" style="display:none;">
+        <div style="padding:24px 28px 20px;border-bottom:1px solid var(--color-border);">
+          <h2 style="margin:0;font-size:1.125rem;">Create New Contact</h2>
+          <p style="margin:6px 0 0;color:var(--color-text-muted);font-size:0.875rem;">Fill in the details. Contact will be created in both systems.</p>
+        </div>
+        <div style="padding:20px 28px;display:flex;flex-direction:column;gap:12px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">First Name *</label>
+              <input type="text" id="ncFirstName" placeholder="John" style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:9px 12px;color:var(--color-text);font-size:0.875rem;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Last Name</label>
+              <input type="text" id="ncLastName" placeholder="Smith" style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:9px 12px;color:var(--color-text);font-size:0.875rem;">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Email *</label>
+            <input type="email" id="ncEmail" placeholder="john@company.com" style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:9px 12px;color:var(--color-text);font-size:0.875rem;">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Phone</label>
+              <input type="tel" id="ncPhone" placeholder="+1 555-123-4567" style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:9px 12px;color:var(--color-text);font-size:0.875rem;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Industry</label>
+              <input type="text" id="ncIndustry" placeholder="HVAC, Dental..." style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:9px 12px;color:var(--color-text);font-size:0.875rem;">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Company Name</label>
+            <input type="text" id="ncCompany" placeholder="Acme Corp" style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:9px 12px;color:var(--color-text);font-size:0.875rem;">
+          </div>
+          <div>
+            <label style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);display:block;margin-bottom:4px;">Website</label>
+            <input type="text" id="ncWebsite" placeholder="acmecorp.com" style="width:100%;box-sizing:border-box;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;padding:9px 12px;color:var(--color-text);font-size:0.875rem;">
+          </div>
+          <div id="ncError" style="color:#ff5252;font-size:0.8125rem;display:none;"></div>
+        </div>
+        <div style="padding:0 28px 20px;display:flex;justify-content:space-between;align-items:center;">
+          <button onclick="showGhlStep(1)" style="background:none;border:none;color:var(--color-text-muted);cursor:pointer;font-size:0.875rem;">&#8592; Back</button>
+          <button onclick="createNewContact()" class="btn btn-primary btn-sm" id="ncSaveBtn">Create Contact</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function openNewContactModal() {
+      showGhlStep(1);
+      document.getElementById('ghlModal').style.display = 'flex';
+    }
+    function closeGhlModal() {
+      document.getElementById('ghlModal').style.display = 'none';
+      document.getElementById('ghlPullEmail').value = '';
+      document.getElementById('ghlPullResult').innerHTML = '';
+    }
+    function showGhlStep(n) {
+      ['ghlStep1','ghlStep2Pull','ghlStep2Create'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+      });
+      if (n === 1) document.getElementById('ghlStep1').style.display = 'block';
+      if (n === 'pull') document.getElementById('ghlStep2Pull').style.display = 'block';
+      if (n === 'create') document.getElementById('ghlStep2Create').style.display = 'block';
+    }
+    function startPullFromGHL() { showGhlStep('pull'); setTimeout(() => document.getElementById('ghlPullEmail').focus(), 50); }
+    function startCreateNew() { showGhlStep('create'); setTimeout(() => document.getElementById('ncFirstName').focus(), 50); }
+
+    async function searchGHL() {
+      const email = document.getElementById('ghlPullEmail').value.trim();
+      if (!email) return;
+      const btn = document.getElementById('ghlSearchBtn');
+      btn.disabled = true; btn.textContent = 'Searching...';
+      const resultEl = document.getElementById('ghlPullResult');
+      resultEl.innerHTML = '';
+      try {
+        const res = await fetch('/api/ghl/pull', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Server error');
+        if (!data.found) {
+          resultEl.innerHTML = `
+            <div style="background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:14px 16px;">
+              <div style="font-weight:600;color:#ff5252;">Contact not found in GHL</div>
+              <div style="font-size:0.8125rem;color:var(--color-text-muted);margin-top:4px;">No contact with this email exists in GoHighLevel.</div>
+              <button onclick="prefillCreateFromEmail('${email.replace(/'/g,"\\'")}')"
+                style="margin-top:10px;background:var(--color-primary);color:#000;border:none;border-radius:6px;padding:7px 14px;font-size:0.8125rem;font-weight:600;cursor:pointer;">Create Now?</button>
+            </div>`;
+        } else {
+          const lead = data.lead;
+          const action = data.created ? 'Imported' : 'Updated';
+          resultEl.innerHTML = `
+            <div style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.3);border-radius:8px;padding:14px 16px;">
+              <div style="font-weight:600;color:var(--color-primary);">&#10003; ${action} successfully</div>
+              <div style="font-size:0.875rem;margin-top:6px;">${lead.contact_name || ''} &mdash; ${lead.company_name || ''}</div>
+              <div style="font-size:0.8125rem;color:var(--color-text-muted);margin-top:2px;">GHL ID: ${lead.id}</div>
+              <a href="/lead/${lead.id}" style="display:inline-block;margin-top:10px;background:var(--color-primary);color:#000;border-radius:6px;padding:7px 14px;font-size:0.8125rem;font-weight:600;text-decoration:none;">Open Lead &rarr;</a>
+            </div>`;
+        }
+      } catch (err) {
+        resultEl.innerHTML = `<div style="color:#ff5252;font-size:0.875rem;">Error: ${err.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Search GHL';
+      }
+    }
+
+    function prefillCreateFromEmail(email) {
+      showGhlStep('create');
+      document.getElementById('ncEmail').value = email;
+    }
+
+    async function createNewContact() {
+      const firstName = document.getElementById('ncFirstName').value.trim();
+      const email = document.getElementById('ncEmail').value.trim();
+      const errEl = document.getElementById('ncError');
+      errEl.style.display = 'none';
+      if (!firstName || !email) {
+        errEl.textContent = 'First name and email are required.';
+        errEl.style.display = 'block';
+        return;
+      }
+      const btn = document.getElementById('ncSaveBtn');
+      btn.disabled = true; btn.textContent = 'Creating...';
+      try {
+        const res = await fetch('/api/ghl/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: firstName,
+            last_name: document.getElementById('ncLastName').value.trim(),
+            email,
+            phone: document.getElementById('ncPhone').value.trim(),
+            company_name: document.getElementById('ncCompany').value.trim(),
+            website: document.getElementById('ncWebsite').value.trim(),
+            industry: document.getElementById('ncIndustry').value.trim()
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Server error');
+        showToast('Contact created in GHL + Lead Manager!', 'success');
+        closeGhlModal();
+        setTimeout(() => window.location.href = '/lead/' + data.lead.id, 400);
+      } catch (err) {
+        errEl.textContent = 'Error: ' + err.message;
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Create Contact';
+      }
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('ghlModal').addEventListener('click', function(e) {
+      if (e.target === this) closeGhlModal();
+    });
   </script>
 </body>
 </html>

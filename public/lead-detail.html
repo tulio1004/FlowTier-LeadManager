@@ -46,8 +46,10 @@
         </div>
         <div class="header-actions">
           <span class="score-badge" id="leadScoreBadge" style="font-size:0.8125rem;padding:5px 14px;">0</span>
+          <span id="ghlBadge" style="display:none;background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);border-radius:6px;padding:4px 10px;font-size:0.75rem;font-weight:600;color:var(--color-primary);" title="GHL Contact ID">GHL &#10003;</span>
           <select class="filter-select" id="stageSelect" style="font-weight:600;"></select>
           <button class="btn btn-sm" id="humanModeBtn" onclick="toggleHumanMode()" title="Toggle Human Mode — when ON, AI outreach is paused for this lead" style="font-size:0.75rem;padding:5px 12px;border-radius:6px;cursor:pointer;transition:all 0.2s;">&#129302; AI Mode</button>
+          <button class="btn btn-secondary btn-sm" id="ghlSyncBtn" onclick="syncToGHL()" title="Push latest data to GHL" style="display:none;">&#8645; Sync GHL</button>
           <a href="#" class="btn btn-secondary btn-sm" id="proposalBtn" title="Create Proposal">&#128196; Create Proposal</a>
           <a href="#" class="btn btn-secondary btn-sm" id="editBtn">&#9998; Edit</a>
           <button class="btn btn-danger btn-sm" id="deleteBtn">&#128465; Delete</button>
@@ -414,13 +416,26 @@
       scoreBadge.textContent = 'Score: ' + score;
       scoreBadge.className = 'score-badge ' + scoreClass;
 
+      // GHL badge + sync button
+      const ghlBadge = document.getElementById('ghlBadge');
+      const ghlSyncBtn = document.getElementById('ghlSyncBtn');
+      if (lead.ghl_contact_id) {
+        ghlBadge.style.display = 'inline-flex';
+        ghlBadge.title = 'GHL Contact ID: ' + lead.ghl_contact_id;
+        ghlSyncBtn.style.display = 'inline-flex';
+      } else {
+        ghlBadge.style.display = 'none';
+        ghlSyncBtn.style.display = 'none';
+      }
+
       // Proposal button — flatten nested arrays for emails/phones
       const proposalBtn = document.getElementById('proposalBtn');
       const proposalBase = 'https://proposals.flowtier.io/builder';
       const params = new URLSearchParams();
       const flatEmails = (lead.emails || []).flat(Infinity).filter(e => typeof e === 'string' && e.includes('@'));
       const flatPhones = (lead.phones || []).flat(Infinity).filter(p => typeof p === 'string' && p.length > 0);
-      params.set('lead_id', leadId);
+      // Use GHL contact ID as the canonical lead_id
+      params.set('lead_id', lead.ghl_contact_id || leadId);
       if (lead.contact_name) params.set('client_name', lead.contact_name);
       if (lead.company_name) params.set('company_name', lead.company_name);
       if (flatEmails[0]) params.set('client_email', flatEmails[0]);
@@ -1230,5 +1245,25 @@
       setTimeout(() => t.classList.add('visible'), 10);
       setTimeout(() => t.classList.remove('visible'), 3000);
     }
-  </script>y>
+
+    async function syncToGHL() {
+      const btn = document.getElementById('ghlSyncBtn');
+      btn.disabled = true; btn.textContent = '\u23f3 Syncing...';
+      try {
+        const res = await fetch('/api/ghl/sync/' + leadId, { method: 'PATCH' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Sync failed');
+        showToast('Synced to GHL successfully!', 'success');
+        // Reload lead to reflect updated ghl_synced_at
+        const r2 = await fetch('/api/leads/' + leadId);
+        lead = await r2.json();
+        render();
+      } catch (err) {
+        showToast('Sync error: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = '\u21c5 Sync GHL';
+      }
+    }
+  </script>
+</body>
 </html>

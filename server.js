@@ -29,10 +29,106 @@ const ADMIN_USER = process.env.ADMIN_USER || 'tulio';
 const ADMIN_PASS = process.env.ADMIN_PASS || '25524515Fl0wT13r';
 const API_KEY = process.env.API_KEY || null;
 
+// GHL Integration
+const GHL_API_KEY = process.env.GHL_API_KEY || '';
+const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || 'pljMXE9pDrk5o2nEKJGq';
+const GHL_BASE = 'https://services.leadconnectorhq.com';
+
 // Ensure directories exist
 [DATA_DIR, CONFIG_DIR, UPLOADS_DIR, USERS_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
+
+// ============================================
+// GHL API HELPERS
+// ============================================
+
+/**
+ * Search GHL for a contact by email.
+ * Returns the GHL contact object or null.
+ */
+async function ghlSearchByEmail(email) {
+  if (!GHL_API_KEY) throw new Error('GHL_API_KEY not configured');
+  const url = `${GHL_BASE}/contacts/search/duplicate?locationId=${GHL_LOCATION_ID}&email=${encodeURIComponent(email)}`;
+  const res = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${GHL_API_KEY}`,
+      'Version': '2021-07-28',
+      'Content-Type': 'application/json'
+    }
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`GHL search failed (${res.status}): ${txt}`);
+  }
+  const data = await res.json();
+  // Returns { contact: {...} } or { contact: null }
+  return data.contact || null;
+}
+
+/**
+ * Create a new contact in GHL.
+ * Returns the created GHL contact object.
+ */
+async function ghlCreateContact(fields) {
+  if (!GHL_API_KEY) throw new Error('GHL_API_KEY not configured');
+  const body = {
+    locationId: GHL_LOCATION_ID,
+    firstName: fields.first_name || '',
+    lastName: fields.last_name || '',
+    email: fields.email || '',
+    phone: fields.phone || '',
+    companyName: fields.company_name || '',
+    website: fields.website || '',
+    address1: fields.address || '',
+    city: fields.city || '',
+    state: fields.state || '',
+    postalCode: fields.postal_code || '',
+    country: fields.country || '',
+    source: fields.source || 'Lead Manager',
+    tags: ['flowtier-lead', ...(fields.tags || [])],
+    customFields: [
+      { id: 'R2zxcmOGhQvgA4YBHFw4', value: fields.industry || '' }
+    ].filter(f => f.value)
+  };
+  const res = await fetch(`${GHL_BASE}/contacts/`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${GHL_API_KEY}`,
+      'Version': '2021-07-28',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`GHL create failed (${res.status}): ${txt}`);
+  }
+  const data = await res.json();
+  return data.contact;
+}
+
+/**
+ * Map a raw GHL contact object to our internal lead fields.
+ */
+function mapGhlContactToLead(c) {
+  const customFields = {};
+  (c.customFields || []).forEach(f => { customFields[f.id] = f.value; });
+  return {
+    id: c.id,  // GHL contact ID becomes the lead ID
+    contact_name: [c.firstName, c.lastName].filter(Boolean).join(' '),
+    company_name: c.companyName || '',
+    emails: c.email ? [c.email] : [],
+    phones: c.phone ? [c.phone] : [],
+    website: c.website || '',
+    address: [c.address1, c.city, c.state, c.postalCode, c.country].filter(Boolean).join(', '),
+    industry: customFields['R2zxcmOGhQvgA4YBHFw4'] || '',
+    tags: c.tags || [],
+    lead_source: c.source || '',
+    ghl_contact_id: c.id,
+    ghl_synced_at: new Date().toISOString()
+  };
+}
 
 // ============================================
 // LEAD STAGES
@@ -297,8 +393,10 @@ function findDuplicates(data) {
 // ============================================
 function createLeadObject(data) {
   const now = new Date().toISOString();
+  // If a GHL contact ID is provided, use it as the lead ID directly
+  const leadId = data.ghl_contact_id || data.id || uuidv4();
   return {
-    id: data.id || uuidv4(),
+    id: leadId,
     company_name: data.company_name || '',
     contact_name: data.contact_name || '',
     emails: Array.isArray(data.emails) ? data.emails : (data.email ? [data.email] : []),
@@ -326,6 +424,8 @@ function createLeadObject(data) {
     activity: Array.isArray(data.activity) ? data.activity : [],
     human_mode: data.human_mode === true ? true : false,
     owner_id: data.owner_id || null,
+    ghl_contact_id: data.ghl_contact_id || data.id || null,
+    ghl_synced_at: data.ghl_synced_at || null,
     lead_score: 0,
     created_at: data.created_at || now,
     updated_at: now,
@@ -2611,6 +2711,133 @@ app.post('/api/clients/:clientId/unassign-leads', requireAdmin, (req, res) => {
     }
   });
   return res.json({ success: true, unassigned });
+});
+
+// ============================================
+// API: GHL INTEGRATION
+// ============================================
+
+// GET /api/ghl/status — check if GHL API key is configured
+app.get('/api/ghl/status', requireAdmin, (req, res) => {
+  res.json({ configured: !!GHL_API_KEY, location_id: GHL_LOCATION_ID });
+});
+
+// POST /api/ghl/search — search GHL by email, returns contact or null
+app.post('/api/ghl/search', requireAdmin, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email required' });
+  try {
+    const contact = await ghlSearchByEmail(email);
+    if (!contact) return res.json({ found: false, contact: null });
+    return res.json({ found: true, contact });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ghl/pull — pull a GHL contact by email and create/update local lead
+app.post('/api/ghl/pull', requireAdmin, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email required' });
+  try {
+    const contact = await ghlSearchByEmail(email);
+    if (!contact) return res.json({ found: false });
+
+    // Check if we already have this lead locally
+    const existing = readLead(contact.id);
+    const mappedFields = mapGhlContactToLead(contact);
+
+    if (existing) {
+      // Update existing lead with fresh GHL data
+      Object.assign(existing, mappedFields);
+      existing.updated_at = new Date().toISOString();
+      if (!existing.activity) existing.activity = [];
+      existing.activity.push({
+        type: 'ghl_synced',
+        message: 'Lead data refreshed from GHL',
+        timestamp: existing.updated_at
+      });
+      writeLead(existing);
+      return res.json({ found: true, created: false, lead: existing });
+    } else {
+      // Create new lead from GHL data
+      const lead = createLeadObject({ ...mappedFields, _source: 'ghl_pull' });
+      lead.activity.push({
+        type: 'created',
+        message: 'Lead pulled from GHL',
+        timestamp: lead.created_at
+      });
+      lead.lead_score = calculateLeadScore(lead);
+      writeLead(lead);
+      return res.json({ found: true, created: true, lead });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ghl/create — create a new contact in GHL and save locally
+app.post('/api/ghl/create', requireAdmin, async (req, res) => {
+  const fields = req.body;
+  if (!fields.email) return res.status(400).json({ error: 'email required' });
+  try {
+    const contact = await ghlCreateContact(fields);
+    const mappedFields = mapGhlContactToLead(contact);
+    const lead = createLeadObject({ ...mappedFields, ...fields, _source: 'ghl_create' });
+    lead.activity.push({
+      type: 'created',
+      message: 'Contact created in GHL and Lead Manager simultaneously',
+      timestamp: lead.created_at
+    });
+    lead.lead_score = calculateLeadScore(lead);
+    writeLead(lead);
+    return res.json({ success: true, lead, ghl_contact_id: contact.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/ghl/sync/:id — re-sync a specific local lead back to GHL
+app.patch('/api/ghl/sync/:id', requireAdmin, async (req, res) => {
+  const lead = readLead(req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  if (!GHL_API_KEY) return res.status(400).json({ error: 'GHL_API_KEY not configured' });
+  try {
+    const nameParts = (lead.contact_name || '').trim().split(' ');
+    const body = {
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || '',
+      email: (lead.emails || [])[0] || '',
+      phone: (lead.phones || [])[0] || '',
+      companyName: lead.company_name || '',
+      website: lead.website || '',
+      tags: lead.tags || [],
+      customFields: [
+        { id: 'R2zxcmOGhQvgA4YBHFw4', value: lead.industry || '' }
+      ].filter(f => f.value)
+    };
+    const r = await fetch(`${GHL_BASE}/contacts/${lead.id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${GHL_API_KEY}`,
+        'Version': '2021-07-28',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      return res.status(500).json({ error: `GHL sync failed (${r.status}): ${txt}` });
+    }
+    lead.ghl_synced_at = new Date().toISOString();
+    lead.updated_at = lead.ghl_synced_at;
+    if (!lead.activity) lead.activity = [];
+    lead.activity.push({ type: 'ghl_synced', message: 'Lead synced to GHL', timestamp: lead.ghl_synced_at });
+    writeLead(lead);
+    return res.json({ success: true, ghl_contact_id: lead.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ============================================
