@@ -30,7 +30,7 @@ const ADMIN_PASS = process.env.ADMIN_PASS || '25524515Fl0wT13r';
 const API_KEY = process.env.API_KEY || null;
 
 // GHL Integration
-const GHL_API_KEY = process.env.GHL_API_KEY || '';
+const GHL_API_KEY = process.env.GHL_API_KEY || 'pit-cecf9555-ca25-4ce8-aa4d-c2d824a73462';
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID || 'pljMXE9pDrk5o2nEKJGq';
 const GHL_BASE = 'https://services.leadconnectorhq.com';
 
